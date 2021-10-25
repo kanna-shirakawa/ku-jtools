@@ -1,4 +1,4 @@
 # ku-jtools
-project environment tools
+projects environment tools
 
 WIP: just loading the project here from original package
