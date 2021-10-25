@@ -6,10 +6,10 @@
 Summary: KUBiC Labs Projects Management Tools
 Name: ku-jtools
 Version: 1.1
-Release: ku21.05
+Release: ku21.10a
 License: LGPL2
 URL: http://www.kubiclabs.com/
-Source0: http://www.kubiclabs.com/sources/ku-jtools_1.1-ku21-05.tar.gz
+Source0: http://www.kubiclabs.com/sources/ku-jtools_1.1-ku21-10a.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 %description
@@ -43,8 +43,32 @@ rm -rf ${RPM_BUILD_ROOT}
 /
 
 %changelog
+* Mon Oct 25 2021 Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+- jtcj
+  - new: --cd option, to force moving in the specified directory after connect
+- jtdeb-port
+  - fix: replaced all backticks with $()
+  - fix: protect from spaces filenames lists (IFS mangle)
+  - mod: added --cd (current dir) in ssh jtcj invocation, to run the remote
+  	   instance in the same directory (warning, the very same, so must be
+	   present on the remote system)
+- jtdeb-rebuild
+  - fix: replaced all backticks with $()
+  - fix: if workdir is a symlink, the output files will goes on the wrong
+  	   directory (.. is not the same of logical parent); now the files
+	   are moved to the right one
+  - fix: after rebuild the resulting .dsc and .change files where removed;
+  	   this behaviour is ok only in klabs environment (we don't use such
+	   files); now the script uses JTDEB_REBUILD_PURGE_EXTS environment
+	   to know what file (what extensions) purge after rebuild; WARNING,
+	   if not set the default is "dsc change", to disable you must set
+	   the env var to empty
+- jtdeb-cache
+  - fix: removed bashism (== instead of =)
+  - fix: now works on temp files, overwrite target ones only on success
 * Sat Sep 18 2021 Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
 - production release ku21.05
+
 * Wed Apr 21 2021 KUBiC Labs (CH) <packager@kubiclabs.com>
 - meta: package owner
   - mod: Allblue SA dismissed, now is KUBiC Labs only

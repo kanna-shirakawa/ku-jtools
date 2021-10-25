@@ -5,7 +5,7 @@
 :description	KUBiC Labs sample-package
 
 :maintainer	KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>
-:homepage	http://www.kubiclabs.com/trac-klpkgs
+:homepage	http://www.kubiclabs.com
 :copy1		maintainer: $maintainer
 :copy2		for copyright see /usr/share/doc/$TOOLKIT/copyright
 
