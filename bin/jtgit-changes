@@ -1,0 +1,118 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+VERSION="1.0"
+
+
+get_commit_number()
+{
+	local number=$1
+	local line=
+	local count=0
+	local found=false
+
+	git log | while read line
+	do
+	  case $line in
+	    commit' '*)
+	    	$found && break		# next commit, we have done
+	    	count=$(($count+1))
+		[ $count == $number ] && found=true
+		continue
+		;;
+	  esac
+	  $found || continue
+
+	  case $line in
+	    "")
+	    	;;
+	    *)
+	    	echo "$line"
+		;;
+	  esac
+	done
+	return 0
+}
+
+
+
+# (MAIN)
+
+commit_number=${1:-"1"}
+
+log=$(get_commit_number $commit_number)
+
+author=$(echo "$log" | grep '^Author: ' | sed -e 's/Author: *//')
+date=$(echo "$log" | grep '^Date: ' | sed -e 's/Date: *//' -e 's/ [A-Z+][0-9][0-9]*$//')
+date=$(date '+%Y.%m.%d %H:%M' --date "$date")
+
+modified=$(echo "$log" | fgrep '#	modified: ' | sed -e 's/.*#	modified:  *//')
+renamed=$(echo "$log" | fgrep '#	renamed: ' | sed -e 's/.*#	renamed:  *//')
+newfiles=$(echo "$log" | fgrep '#	new file: ' | sed -e 's/.*#	new file:  *//')
+
+moved=
+deleted=
+movedir=
+oldmovedir=
+
+oifs="$IFS"; IFS=$(echo -e "\n\r")
+for file in $(echo "$log" | fgrep '#	deleted: ' | sed -e 's/.*#	deleted:  *//')
+do
+	new=$(basename "$file")
+	###echo -e "\ncheck	>>$file<<\n	>>$new<<"
+	new=$(echo "$newfiles" | grep "/$new$")
+	###echo "NEW  $new"
+
+	if [ "X$new" == "X" ]
+	then
+		###echo "DEL $file"
+		deleted="$deleted\n$file"
+	else
+		###echo "REN $file -> $new"
+		newfiles=$(echo "$newfiles" | grep -v "/$file$")
+		moved="$moved\n  $file"
+		movedir=$(dirname "$new")
+		[ "$oldmovedir" != "$movedir" ] && {
+			[ "$oldmovedir" ] && moved="$moved\n  -> $oldmovedir"
+			oldmovedir=$movedir
+		}
+	fi
+done
+[ "$oldmovedir" ] && moved="$moved\n  -> $oldmovedir"
+IFS="$oifs"
+
+out=
+
+[ "X$modified" != "X" ] && {
+	out="$out\n\nFILES MODIFICATI:\n"
+	out="$out"$(echo -e "$modified" | sed -e 's/^/  /')
+}
+[ "X$newfiles" != "X" ] && {
+	out="$out\n\nFILES NUOVI:\n\n"
+	out="$out"$(echo -e "$newfiles" | sed -e 's/^/  /')
+}
+[ "X$deleted" != "X" ] && {
+	out="$out\n\nFILES CANCELLATI:\n"
+	out="$out"$(echo -e "$deleted" | sed -e 's/^/  /')
+}
+[ "X$renamed" != "X" ] && {
+	out="$out\n\nFILES RINOMINATI:\n"
+	out="$out"$(echo -e "$renamed" | sed -e 's/^/  /')
+}
+[ "X$moved" != "X" ] && {
+	out="$out\n\nFILES SPOSTATI:\n$moved"
+}
+
+[ "X$out" != "X" ] && {
+	echo "MODIFICHE AL PROGETTO: $(basename $PRJ)"
+	echo
+	echo "  $author"
+	echo "  $date"
+	echo -e "$out"
+	echo -e "\n--\n  via $CMD $VERSION"
+}
+
+exit 0

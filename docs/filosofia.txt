@@ -1,0 +1,112 @@
+docs filosofia alla base del pacchetto
+
+== premessa ==
+
+Il progetto e le discussioni teoriche che ci stanno dietro
+derivano in parte dall'esperienza maturata da me in anni di
+gestione sia di sistemi, sia progetti informatici.
+
+Essenzialmente e' una riscrittura completa di una serie di
+tools, piu' volte riscritti e modificati negli anni.
+
+== scenario ==
+
+Lo scenario tipico e' quella della software house che opera in
+ambiente Linux (con eventuali derivati).
+
+L'azienda segue diversi progetti, ma in questo caso specifico si
+fa riferimento, per ora, ai soli progetti informatici. Inoltre,
+preciso che un progetto e' inteso a qualsiasi livello, per cui
+in ambito informatico si assiste, in virtu` di una formalizzazione
+sempre piu` spinta, nella suddivisione sempre piu` elementare
+dei problemi da affrontare: questi diventano un singolo progetto.
+
+Ne consegue che un progetto puo' essere parte di un progetto piu' ampio,
+e deriva da quello (quelli) sopra una serie di caratteristiche.
+
+Inoltre un progetto genera di solito uno o piu' pacchetti, che una
+volta installati possono anche diventare, a loro volta tools, di aiuto per
+la gestione dei progetti.
+
+Il caso estremo e' questo stesso progetto, il cui scopo e' quello di
+fornire tools per gestire se stesso, con tutte le complicazioni che
+questa degenrazione comporta, e conseguenti mal di testa.
+
+Un progetto puo' avere quindi delle dipendenze, ovvero tools o altri
+progetti che devono essere "attivati" prima di poter operare su quello
+corrente. La dipendenza dovrebbe essere possibile anche con progetti
+in fase di sviluppo (puntamento a quelli in development invece che
+a quelli installati).
+
+== targets ==
+
+ 1. definire e gestire in modo organico una struttura di filesystem,
+ ovvero di directories e files
+ 1. fornire strumenti univoci e versatili per gestire la configurazione
+ 1. fornire strumenti per la documentazione, sia nella stesura (con
+ possibilita' di lavorare su diversi formati di input), sia nella
+ fruizione (post-elaborazione e differenti motori di rendering).
+ 1. descrivere la corretta procedura e fornire gli strumenti per
+ la costruzione dell'environment (variabili di), e in generale quello
+ che si definisce fase di profiling
+ 1. supporto a sistema di versioning, automatizzare quento possibile
+ 1. garantire una facile trasportabilita', replicabilita' e riolocabilita'
+ 1. poter operare in una rete appositamente strutturata o stand-alone
+ 1. poter operare in un sistema multiuser e multirole
+ 1. fornire strumenti di integrazione per la generazione di supporti
+ di installazione (pacchetti), possibilimente in differenti formati
+ (deb, rpm, ...)
+ 1. gestire le dipendenze da altri progetti / tools
+ 1. ...................
+
+== note ==
+ * le parte riguardante i '''targets''' dovrebbe essere codificata e
+ messa tra le info standard di progetto
+
+----
+== appunti sparsi ancora da riordinare ==
+
+concetto di cj (change project)
+
+documentare approccio pratico, con esempi:
+ * se voglio lavorare sui web, sul nostro server ora digito "cj www"
+ * mi trovo impostato $PRJ=/w/www, e carica un profilo (variabili
+ di ambiente e altri setup) che puo` essere un file preciso, sotto la
+ etc del progetto, ad esempio $PRJ/etc/profile
+ * la directory bin del progetto ($PRJ/bin) viene aggiunta al path
+ di ricerca, cosi` ho a disposizione eventuali comandi relativi solo
+ a quel progetto, la gestione web
+ * devo lavorare su qualcosa d'altro, chiudo la finestra shell, ne
+ apro un'altra e digito un altro "cj"
+
+in pratica e` un po come collegarsi come utenti diversi (la root ad esempio
+ha a disposizione comandi in piu` rispetto agli utenti normali), ma
+scollega questo meccanismo dall'utente, e lo applica ai progetti
+
+progetto = ambiente di lavoro
+
+il profiling puo` essere fatto anche in modo batch, cosi` da permettere
+ad esempio ai job di cron di poter operare
+
+al momento non c'e` la gestione utenti, che deve essere fatto attraverso
+i gruppi linux, ma dovrebbero esserci degli strumenti per aiutare
+in questo compito; probabilmente serve un progetto "gestione utenti"
+e dei tools in questo di integrazione con questo (che diventa una
+dipendenza)
+
+il caso sopra mette in luce: questo progetto e` la root di tutti gli
+altri, quindi attenzione a creare dipendenze, questo non dovrebbe
+averne altrimenti si va in loop;
+si posono fare tre cose:
+ * integrare la funzione richiesta (in questo caso gestione utenti)
+ in questo progetto, mi piace poco, e` una soluzione confusa
+ * creare un pacchetto specifico, di "ponte" tra i due, ovvero
+ A ku-jtools (questo), B gestione utenti (l'altro), C estensioni
+ ku-jtools-utenti (il ponte), che ha come dipendenza A e B, soluzione
+ ideale, ma sicuramente da gestire
+ * ignorare il problema, o meglio, non specificare la dipendenza e
+ localizzarla sui singoli comandi, che devono controllare in modo
+ autonomo la dipendenza da B, una mezza porcata ma che almeno
+ puo` funzionare
+
+

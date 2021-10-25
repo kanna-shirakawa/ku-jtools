@@ -1,0 +1,25 @@
+# based on KL packages template 1.1 (2011/11)
+
+all:	debian_control
+
+build:
+	@echo "nothing to do for build"
+
+install: build
+	DESTDIR=$(DESTDIR) ./install.sh
+
+clean:
+	rm -rf $(DESTDIR)
+
+doc:
+
+mrproper: clean clean_debian_control
+
+
+# pre-processed debian control files
+#
+debian_control:
+	sh install.sh debian_control
+
+clean_debian_control:
+	for file in `ls debian.in`; do rm -f debian/$$file; done

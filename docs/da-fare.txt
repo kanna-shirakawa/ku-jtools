@@ -1,0 +1,8 @@
+meta todo list
+
+ * packaging tools
+  * makefiles template
+  * cross platform (deb, rpm)
+
+ * '''jdoc-rebuild'''
+  * STDL (frozen project)

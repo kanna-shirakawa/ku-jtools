@@ -1,0 +1,61 @@
+[jtools]
+  fs_data	/w
+  fs_work	::jtools.fs_data::
+  dir_arc	::jtools.fs_data::/arc
+  dir_work	::jtools.fs_work::/work
+
+
+[customer]
+  code		FIXME_CUST_CODE
+  shortname	FIXME_CUST_SHORTCODE
+  location	FIXME_CUST_LOCATION
+  name		FIXME_CUST_NAME
+
+
+# jscm (fossil, bazaar, etc)
+
+[jscm]
+  reposerver	scmrepo
+  repobase	::jtools.dir_arc::/::jscm.tool::
+  tool		fossil
+
+[jscm.fossil]
+  user		www-data
+  group		www-data
+
+[jscm.bazaar]
+  user		bazaar
+  group		bazaar
+
+
+
+# jscm default groups
+
+[jscm-group]
+  weburl	http://www.mydomain.com
+  webdir	::jtools.dir_work::/www/vhosts/www.mydomain.com
+  webfooter	::customer.name:: Fossil Repo
+
+[jscm-group.pub]
+  name		prj-::customer.code::
+  desc		::customer.name:: Pubblic Projects
+  webslot	fossil-pub
+
+[jscm-group.adm]
+  name		prj-::customer.code::-adm
+  desc		::customer.name:: Administrative Projects
+  webslot	fossil-adm
+
+[jscm-group.internal]
+  name		prj-::customer.code::-internal
+  desc		::customer.name:: Internal Projects
+  webslot	fossil-internal
+
+
+# /bin/telno defaults
+#
+[telno]
+  searchpath				# default: $HOME/Documenti
+  rebuildpath	/w/prj:/w/server/prj
+  localcache				# default: $HOME/.telno.cache
+

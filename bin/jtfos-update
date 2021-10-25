@@ -1,0 +1,196 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+## jtfos-update - fossil, wrapper for "update" command
+##
+## calls the "update" command for fossil in current project,
+## following these steps:
+##
+##   *  first calls "update -n" to detect conflicts
+##   *  if conflicts and no "-f" arg passed, stops
+##   *  executes update
+##   *  renames conflict files in an usable form
+##
+## for conflict files, fossil leaves (f.e=filename with
+## optional extension):
+##
+##   1. f.e-original, the original local copy
+##   2. f.e-merge, the remote copy
+##   3. f.e-baseline, the copy into the local repo (for
+##	references purpouses)
+##   4. f.e, not clear, sometimes the merged of 1 & 2 (
+##	if textfiles, merging not works on binary), some
+##	other times is unchanged ... boh
+##
+## we want to have, instead, this situation, ts=timestamp:
+##
+##   1. f.e, original local copy (f.e-original)
+##   2. f-MERGE-ts-REMOTE.e, remote copy (f.e-merge)
+##   3. f-MERGE-ts-OLD.e, copy into the local repo (f.e-baseline)
+##
+## nb: auto merged files is discarded
+##
+CMD=`basename $0`
+
+usage()
+{
+	echo "usage: $CMD [-x] [fossil update parms]" >&2
+	exit 1
+}
+
+cleanup()
+{
+	rm -rf $tmpdir
+}
+
+pline()
+{
+	printf "%-11s %s\n" "$1" "$2"
+}
+
+
+# (MAIN)
+
+tmpdir=`mktemp -d /tmp/$CMD-XXXXXX`
+f_exec="false"
+timestamp=`date '+%Y%m%d-%H%M'`
+
+trap "cleanup; exit 255" 1 2 3
+
+[ "X$1" == "X-x" ] && {
+	f_exec="true"
+	shift
+}
+
+# examine incoming update
+#
+cp /dev/null $tmpdir/add
+cp /dev/null $tmpdir/update
+cp /dev/null $tmpdir/remove
+cp /dev/null $tmpdir/conflict
+
+jtfos-update-n "$@" >$tmpdir/update-out || {
+	echo -e "\nerror $? during 'fossil update -n'\n"
+	cat $tmpdir/update-out
+	cleanup
+	exit 1
+}
+
+echo -e "\nFOSSIL UPDATE\n"
+pline "PRJ:" "$PRJNAME - $PRJDESC"
+pline "DIR:" "$PRJ"
+
+cat $tmpdir/update-out | while read action fname
+do
+  case $action in
+    ADD)	echo "$fname" >>$tmpdir/add ;;
+    UPDATE)	echo "$fname" >>$tmpdir/update ;;
+    REMOVE)	echo "$fname" >>$tmpdir/remove ;;
+    MERGE)	echo "$fname" >>$tmpdir/conflict ;;
+    CONFLICT)	echo "$fname" >>$tmpdir/conflict ;;
+    updated-to:|tags:|comment:)
+    	pline "$action" "$fname"
+	;;
+  esac
+done
+echo
+
+[ -s $tmpdir/add -o -s $tmpdir/update -o -s $tmpdir/conflict -o -s $tmpdir/remove ] || {
+	echo "no updates"
+	exit 0
+}
+
+for action in add update remove
+do
+	tag=`echo $action | tr '[a-z]' '[A-Z]'`
+
+	[ -s $tmpdir/$action ] && {
+		cat $tmpdir/$action | while read fname
+		do
+    			pline "$tag" "$fname"
+		done
+	}
+done
+
+[ -s $tmpdir/conflict ] && {
+	echo -e "\n** CONFLICT(s) DETECTED **\n"
+	cat $tmpdir/conflict | while read fname
+	do
+		f_deleted=false
+		deltag=
+		echo "$fname" | grep -q 'edited locally but deleted by update' && {
+			f_deleted=true
+			deltag=" (DELETED)"
+			fname=`echo "$fname" | sed -e 's/ - edited locally but deleted.*//'`
+		}
+    	  	pline "CONFLICT" "$fname$deltag"
+
+	done
+	echo ""
+	echo "conflicting files (file.ext) will be renamed as:"
+	echo ""
+	echo " remote files:   file-MRG-${timestamp}-REMOTE.ext"
+	echo " old (in repo):  file-MRG-${timestamp}-OLD.ext"
+	echo " deleted files:  file-DEL-${timestamp}.ext"
+	echo ""
+}
+
+$f_exec || {
+	echo -e "*NOT* UPDATED (use '-x' flag to execute update)" >&2
+	exit 0
+}
+
+
+# executes update
+#
+fossil update "$@" || {
+	echo "error $? running 'fossil update $@'" >&2
+	cleanup
+	exit 1
+}
+
+[ -s $tmpdir/conflict ] && {
+
+	echo -e "\n** RESOLVING CONFLICTS **\n"
+
+	cat $tmpdir/conflict | while read fname
+	do
+		f_deleted=false
+		echo "$fname" | grep -q 'edited locally but deleted by update' && {
+			f_deleted=true
+			fname=`echo "$fname" | sed -e 's/ - edited locally but deleted.*//'`
+		}
+
+		dir=`dirname "$fname"`
+		file=`basename "$fname"`
+		base=`basename "$fname" | sed -e 's/\.[^.]*$//'`
+		ext=`basename "$fname" | sed -e "s#^$base\.##"`
+		if [ "$base" == "$ext" ]
+		then
+			ext=""
+		else
+			ext=".$ext"
+		fi
+		rem="${base}-MRG-${timestamp}-REMOTE$ext"
+		old="${base}-MRG-${timestamp}-OLD$ext"
+		del="${base}-DEL-${timestamp}$ext"
+
+		cd $PRJ/$dir
+
+		if $f_deleted
+		then
+			mv "$file" "$del"	|| exit $?
+		else
+			mv "${file}-original" "$file"	|| exit $?
+			mv "${file}-merge" "$rem"	|| exit $?
+			mv "${file}-baseline" "$old"	|| exit $?
+		fi
+	done
+}
+
+
+cleanup
+exit 0
+

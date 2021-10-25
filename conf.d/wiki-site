@@ -1,0 +1,32 @@
+## samples definizioni wiki specifiche
+##
+## == summary ==
+## || scope || project, system ||
+## || install (project) || $PRJ/etc/conf.d/ ||
+## || install (system) || /etc/jtools/conf.d/ ||
+## || sections || wiki ||
+##
+## == description ==
+##
+## Contiene le definizioni specifiche per la wiki in uso:
+##
+##  * '''datapath''': path completo della directory data della wiki moin moin
+##  (es:  /w/www/vhosts/wiki.taverne.klabs/wiki/data)
+##  * '''bot_name''': nome dell'utente usato dai tools (es: JadminBot)
+##  * '''bot_id''': id moin moin dell'utente (es: 1226770654.04.21032)
+##
+## Questi dati sono essenziali per i comandi che interagiscono con la wiki, il
+## file puo` essere installato system wide se la wiki e` comune a tutti i progetti,
+## oppure ogni progetto puo` avere le proprie impostazioni.
+##
+## L'utente deve essere creato utilizzando direttamente la wiki, nella directory
+## ''(datapath)/user'' verra` creato un file che ha come nome un id numerico
+## unico, puo` essere trovato rapidamente con il comando
+## {{{
+## $ fgrep "name=(bot_name)" *.*.*
+## }}}
+
+[wiki]
+  datapath		INSERT_DATA_PATH_HERE
+  bot_name		JadminBot
+  bot_id		INSERT_BOT_ID_HERE

@@ -1,0 +1,172 @@
+docs workflow per documentazione (draft)
+
+== strumenti ==
+
+=== bazaar ===
+==== pro ====
+ * gestione revisioni (history, tracciamento modifiche)
+ * portabilita`
+ * flessibile ed affidabile
+ * scritto in python
+
+==== cons ====
+ * gestisce solo files e directories, non si puo` usare per gestire dati
+ contenuti in database, tranne utilizzando dump o export periodici
+ * necessita di wrappers per automatizzare il workflow checkout/commit
+ per gli utenti, sopratutto per quelli che non hanno accesso alla shell
+ * modifiche condivise solo in modo asincrono (chi preleva il sorgente di
+ un documento deve avere l'esclusiva sulle modifiche fino al commit, va
+ gestito a mano, i conflitti sono un effetto indesiderato da evitare)
+
+==== note ====
+ * permette lavoro offline
+ * ideale per documenti redatti da una sola persona per volta
+
+=== wiki ===
+==== pro ====
+ * editor grafico semplice ma abbastanza efficace per documenti semplici
+ * permette modifiche condivise praticamente in tempo reale (lavorando
+ online il lock di una pagina si risolve in tempi brevi, e senza generare
+ conflitti)
+ * veloce e immediato, curva di apprendimento rapida se si utililizzano
+ solo le funzioni base (in pratica l'edito grafico)
+ * utilizzando come base dati files di testo e` agevolmente aggredibile
+ dall'esterno, e in una certa misura puo` essere sottoposta al controllo
+ di bazaar (ammesso di poter automatizzare il task)
+ * buona resa grafica, possibilita` di modificare layout usando CSS
+ * scritto in python
+
+==== cons =====
+ * parser carente a livello sintattico (che puo` essere modificato o
+ esteso, ma e` da fare)
+ * approssimativo e carente su gestione macro, definizioni, variabili, ecc
+ * non permette lavoro offline
+
+==== note =====
+ * lavora online
+ * ideale per documenti sui quali lavorano contemporaneamente piu` persone
+ * il lavoro offline si implementa attraverso l'uso di wiki personali, e
+ relativa installazione della struttura software sui computer remoti (apache,
+ python, wiki, taroccamento dns/hosts, vpn)
+ * esiste una macro chiamata PageComment2 che permette di inserire commenti
+ in coda ad una pagina, i commenti sono memorizzati in una pagina separata
+ (quindi nessuna interferenza, la pagina dei commenti puo` essere esportata
+ ed elaborata esternamente)
+
+=== drupal (cms) ===
+==== pro ====
+ * ottima resa grafica, ampia disponibilita` di temi preconfezionati
+ * ben seguito e implementato con cura (buon livello di sicurezza)
+
+==== cons ====
+ * lavora solo online
+ * non puo` essere messo sotto il controllo di bazaar, quindi necessita di task
+ specifici per backup dei testi in formato sorgente (testo)
+ * scritto in PHP
+
+==== note ====
+ * ideale per pubblicazione di articoli, blogs, gestione community esterna
+ * utilizza database relazionale, quindi permette di accedere ai dati anche
+ attraverso altri strumenti (es: django, sql), ma non in modo immediato
+ * puo` essere usato per tenere log di attivita`, tramite moduli specifici
+ o i blog personali gia` nel core, ma probabilmente parte di queste funzioni
+ sono svolte da gestione groupware (es: egroupware)
+
+
+= TIPI DI DOCUMENTI =
+Occorre definire i tipi di documento, e da questi indicare i relativi
+strumenti per gestirli, e relativi workflow, vedere quindi del draft di
+Luca quali tipi di documento sono gia` stati identificati ed aggiungere
+quelli che mancano.
+
+Per tipo indendo anche lo stato di un documento, ad esempio, se e` un draft
+necessita di essere passato ad altri per commenti, i quali sono spesso
+inline perche` riferiti a singole righe, se invece e` un documento
+operativo, come la descrizione di una procedura di attivaziono o il manuale
+d'uso di un comando, viene in genere redatto da una sola persona e i
+commenti possono essere globali al documento, richieste di chiarimenti,
+correzioni, ecc.
+
+= ESEMPI DI WORKFLOW =
+
+== documento su file ==
+ * checkout da bazaar del progetto o di una specifica subdirectory
+ * creazione e/o modifiche ai documenti (files di testo, embedded)
+ * pubblicazione (per anteprima, es ::jdoc-rebuild::)
+ * commit modifiche a bazaar
+ * pubblicazione finale
+
+== lavoro su copia offline ==
+ * connettere il portatile in rete locale o vpn
+ * checkut da repository
+ * disconnessione dalla rete
+ * modifiche
+ * riconnessione alla rete
+ * commit
+ * sul server, eventuale update del progetto e pubblicazione
+
+
+Gli esempi sopra presuppongono che:
+ * i documenti appartengono ad uno specifico progetto
+ * ogni progetto corrisponde ad uno slot nel repository di bazaar
+ * sul server aziendale esiste un checkout di ogni progetto, che
+ potremmo chiamare l'immagine ''master'', e che serve ad esempio per
+ la pubblicazione, oppure per poterci lavorare sopra quando si e` in sede
+
+= CONSIDERAZIONI SUI DOCUMENTI FISICI =
+
+Elenco ora alcuni tipi di documento, visti dalla prospettiva di dove sono
+fisicamente posizionati:
+
+== documentazione embedded ==
+=== dove ===
+ * la documentazione si trova nei sorgenti (scripts, programmi, files di testo)
+ * e` sotto il controllo di bazaar
+ * viene estratta ed elaborata per la pubblicazione (es: ::jdoc-rebuild::)
+ * essendo post-processata puo` utilizzare il database di definizione delle
+ variabili di '''osconf''' e tutte le features tipiche di un postprocessing,
+ come inserimento automatico di header, footer, ecc
+
+=== modifiche ===
+ * puo` essere modificata solo dai sorgenti
+ * occorre seguire workflow di bazaar checkout/commit
+
+=== commenti ===
+ * i commenti inline possono essere inseriti solo nei sorgenti
+ * per i commenti a fine pagina si puo` usare la macro PageComment2
+
+=== problemi ===
+ * al momento utilizza la sintassi wiki, che va bene per cose molto
+ semplici ma e` un incubo per cose appena piu` complesse
+
+== documentazione wiki ==
+=== dove ===
+ * viene creata e mantenuta direttamente sulle wiki
+ * per poterla mettere sotto il controllo di bazaar sarebbe meglio poterla
+ esportare automaticamente dalla wiki in files di testo, in locazioni
+ definite
+ * non ha bisogno di pubblicazione, ma l'esportazione puo` permettere
+ di ripubblicarla sotto altre forme
+
+=== modifiche ===
+ * direttamente sulla wiki
+ * se su wiki personali, solo dal proprietario
+ * per essere modificabile da piu` persone deve essere su una wiki condivisa,
+ ma in questo caso puo` essere modificata solo online
+
+=== commenti ===
+ * commenti inline direttamente modificando online sulla wiki
+ * commenti fine pagina sempre con macro PageComment2
+
+=== problemi ===
+ * lavoro offline difficoltoso o parziale
+
+(.... WORK IN PROGRESS ....)
+
+== NOTE ==
+ * i titoli, usando il CSS di standard, non sono distinguibili, attivare
+ almeno la numerazione in attesa di modificare il CSS
+ * qualcuno dovrebbe spiegaremi perche` il parser di moin si incasina
+ cosi` facilmente, ad esempio in questa pagina, sotto '''wiki''', i titoli
+ '''cons''' e '''note''' che sono scritti esattamente come gli altri, non
+ vengono elaborati

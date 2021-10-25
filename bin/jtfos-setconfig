@@ -1,0 +1,77 @@
+#!/bin/bash
+
+CMD=`basename $0`
+
+usage()
+{
+	echo "usage: $CMD fossil-repo key value [key value] ...." >&2
+	exit 1
+}
+
+set_config()
+{
+	local str=`echo -e "$2" | head -1`
+	local xparm=
+
+	[ "x$str" != "x$2" ] && str="$str ..."
+
+	$f_hex && {
+		xparm="X"
+		str="X'$str"
+	}
+
+	printf " set %-20s to %-50.50s\n" "$1" "$str"
+	echo "
+PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+delete from config where name = '$1';
+insert into config values ( '$1',$xparm'$2', strftime('%s') );
+COMMIT;
+" | sqlite3 $fossil_repo
+}
+
+list_settings()
+{
+	local db=$1
+	echo "select name from config;" | sqlite3 $db | sort
+}
+
+
+# (MAIN)
+
+f_hex="false"
+do_list="false"
+
+[ "x$1" == "x-l" -o "x$1" == "x--list" ] && {
+	do_list="true"
+	shift
+}
+[ "x$1" == "x-x" -o "x$1" == "x--hex" ] && {
+	f_hex="true"
+	shift
+}
+
+[ $# == 0 ] && usage
+
+fossil_repo="$1" ; shift
+
+[ -f "$fossil_repo" -a -r "$fossil_repo" ] || {
+	echo "fossil-repo '$fossil_repo' not found or not readable" >&2
+	exit 1
+}
+
+$do_list && {
+	list_settings $fossil_repo
+	exit $?
+}
+
+[ $# -lt 2 ] && usage
+
+while [ $# != 0 ]
+do
+	[ $# -lt 2 ] && usage
+	set_config "$1" "$2" || exit $?
+	shift 2
+done
+
+exit 0

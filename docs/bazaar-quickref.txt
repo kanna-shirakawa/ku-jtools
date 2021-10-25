@@ -1,0 +1,101 @@
+docs bazaar, quick reference
+
+== definizioni ==
+In questo documento si utilizzano:
+ * '''prjname''' nome del progetto da bazaarizzare, e nome del repository
+ * '''server''' nome del server bazaar
+
+== creare repository (no branches) ==
+
+Setup lato server (comandi da eseguire comunque sul client):
+{{{
+$ bzr init-repo bzr://server/prjname
+$ bzr init bzr://server/prjname
+}}}
+Il secondo comando da` errore, ma crea ugualmente un branch uguale al
+repository stesso, inizializzato col primo comando.
+
+<!> non so se l'errore sia dovuto al fatto che sto cercando di creare un
+branch uguale al repo, nei docs non ho trovato nulla al riguardo,
+verificare
+
+Setup lato client, rinominare il progetto con un nome temporaneo (ad
+esempio ''prjname.original'',
+poi checkout del repository vuoto,
+cosi` viene creato uno slot di lavoro vuoto,
+copia dei files nello slot,
+aggiungere contenuto completo a bazaar
+(prima dell'ultimo step eventualmente compilare lista pattern da ignorare):
+{{{
+$ mv prjname prjname.original
+$ bzr checkout bzr://server/prjname
+$ cd prjname.original
+$ cp -avf . ../prjname
+$ cd ../prjname
+$ bzr add
+}}}
+
+== creare lista pattern da ignorare ==
+{{{
+$ bzr ignore "Thumbs.db"
+$ bzr ignore "*.tmp"
+$ bzr ignore "*~"
+}}}
+Viene creato il file '''.bzrignore''' sulla top directory del repository,
+automaticamente aggiunto a bazaar, puo` essere modificato con un editor.
+
+== creare slot di lavoro da repository ==
+Spostarsi nella directory di lavoro principale, e lanciare:
+{{{
+$ bzr checkout bzr://server/prjname
+}}}
+Da qui in poi tutti i comandi devono essere lanciati dalla directory di
+progetto (prjname) o da una sua subdirectory.
+
+== controllare situazione ==
+{{{
+$ bzr status
+$ bzr log
+}}}
+
+== commit modifiche ==
+{{{
+$ bzr commit
+$ bzr commit -m "log message"   (modo non interattivo)
+}}}
+Se non viene specificato un messaggio di log, si apre l'editor su un
+file di testo temporaneo.
+
+== aggiungere/togliere ==
+{{{
+$ bzr add file(s) or dir(s)
+$ bzr rm file(s)
+$ bzr rmdir dir(s)
+$ bzr mv ...
+$ bzr cp ...
+}}}
+Il comando '''add''' e` recursivo. I comandi equivalenti a quelli standard
+(rm, rmdir, mv, cp) lavorano come quelli originali, e in piu` notificano la
+modifica a bazaar. Nel caso di copia o spostamento (cp, mv) se la
+destinazione e` una directory deve essere gia` sotto il controllo di versione,
+nel caso non lo fosse occorre prima fare '''add''' della directory.
+
+== annullare le modifiche ==
+{{{
+$ bzr revert
+}}}
+
+== esempio di ciclo di lavoro su piu` hosts ==
+Presupponendo di avere gia` eseguito il checkout per creare, sugli hosts,
+le directories di lavoro, su ciascun host la sequenza di lavoro e` questa:
+
+{{{
+$ bzr update         # prelevare eventuali aggiornamenti
+... (modifiche) ...
+$ bzr status         # per controllare se e` tutto ok
+$ bzr commit
+}}}
+
+Durante la fase di update possono verificarsi conflitti (se sono stati
+modificati files a loro volta modificati nel repository), vanno risolti
+a mano prima del commit.

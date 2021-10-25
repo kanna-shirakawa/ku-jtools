@@ -1,0 +1,3 @@
+docs links a risorse esterne
+
+ * bazaar, guida (english): [[http://doc.bazaar-vcs.org/bzr.dev/en/user-guide/index.html]]

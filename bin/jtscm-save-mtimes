@@ -1,0 +1,40 @@
+#!/bin/bash
+
+CMD=`basename $0`
+
+usage()
+{
+	echo "usage: $CMD" >&2
+	exit 1
+}
+
+[ "$PRJ" == "" ] && {
+	echo "you must be connected to a project (\$PRJ undefined)" >&2
+	exit 1
+}
+
+# (MAIN)
+
+outfile=.prj_mtimes
+
+cd $PRJ
+echo -n " collecting mtimes in \$PRJ/$outfile ... "
+find -print | perl -e '
+	while (<>) {
+		chomp();
+		s#^./##;
+		next	if ($_ eq ".prj_mtimes");
+		next	if ($_ eq "_FOSSIL_");
+		next	if ($_ eq ".bzr" || $_ =~ /\.bzr\//);
+		next	if ($_ eq ".git" || $_ =~ /\.git\//);
+		next	if ($_ eq "Thumbs.db");
+		my @stats = stat($_);
+		my @tmp = split( / /, `ls -lsd "$_"` );
+
+		print( $_, "|", $stats[9], "|", $tmp[3], "\n" );
+	}
+' >$outfile
+
+set `wc -l $outfile`
+echo "$1 files"
+exit 0

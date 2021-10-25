@@ -1,0 +1,6 @@
+build-essential
+dh-make
+debhelper
+devscripts 
+
+bzr

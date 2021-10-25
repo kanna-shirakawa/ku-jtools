@@ -1,0 +1,45 @@
+# -*- coding: utf-8 -*-
+%ifos linux
+%define _bindir /bin
+%endif
+
+Summary: __description__
+Name: ku-__TOOLKIT__
+Version: __TOOLKIT_VERSION__
+Release: __TOOLKIT_RELEASE__
+License: LGPL2
+URL: __homepage__
+Source0: http://www.kubiclabs.com/sources/ku-__TOOLKIT_____TOOLKIT_VERSION__-__drelease__.tar.gz
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+
+%description
+A small set of tools for projects development and management:
+.
+ - project directory structure maintenance
+ - shell environment auto setup based on concept of 'current project'
+ - debian packages build and repo maintenance utils/frontends
+
+%prep
+%setup -q
+
+%build
+make build
+
+%check
+
+%install
+rm -rf ${RPM_BUILD_ROOT}
+fakeroot make DESTDIR=$RPM_BUILD_ROOT install
+
+%post
+
+%preun
+
+%clean
+rm -rf ${RPM_BUILD_ROOT}
+
+%files
+%defattr(-,root,root,-)
+/
+
+%changelog

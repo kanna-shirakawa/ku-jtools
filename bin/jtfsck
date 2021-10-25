@@ -1,0 +1,250 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+## tools,project controlla e ripara struttura filesystem
+##
+## == synopsis ==
+## === usage ===
+##  ::filename:: [-q]
+##
+## === options ===
+##
+##  * '''-q'''|'''--quiet''' lavora in modo silenzioso
+##  * '''--repair''' ripara automaticamente quello che e` possibile
+##  * '''--depth''' controlla anche le cose opzionali, di default solo quelle mandatorie
+##  * '''--multisource''' assume che il progetto non abbia una directory sources con lo
+##  stesso nome del progetto (seguito dalla versione), ma contiene piu` sorgenti diversi
+##
+## == descrizione ==
+##
+## ::filename:: controlla la struttura logica del filesystem di
+## progetto, segnalando eventuali anomalie su standard output.
+##
+## Se richiesta la riparazione, interviene automaticamente dove
+## possibile per correggere i problemi, che possono essere:
+##
+## * directories mancanti
+## * files richiesti mancanti
+## * files opzionali ma consigliati, mancanti
+##
+## Esce con stato stato ok se non ci sono problemi, oppure se c'erano ma
+## sono stati riparati automaticamente.
+##
+## == multisource ==
+##
+## Se il progetto e` relativo ad un package, il nome del progetto coincide con quello
+## del package, e nella directory principale esiste una subdir con i sorgenti di nome
+## ''progetto-VV'', dove VV e` la versione; in questo caso le working directories
+## sono linkate alle corrispondenti sottostanti, quelle dei sorgenti.
+##
+## Se invece il progetto raccoglie diversi packages (o sottoprogetti, branches), allora
+## ci saranno tante subdir sorgenti quanti sono i diversi packages, e le working
+## directories di progetto sono reali, a livello principale, non links.
+##
+## Usare quindi l'opzione ''--multisource'' in questo caso.
+
+
+# includes standard definitions and functions
+#
+. jtfunctions.sh
+
+usage()
+{
+	echo "
+usage: $CMD [options]
+
+options:
+  -q|--quiet	lavora silenziosamente
+  --repair	tenta di riparare automaticamente i problemi
+  --depth	controlla anche le cose opzionali, default: solo mandatorie
+  --multisource	assume che il progetto non abbia una directory sources con lo
+		stesso nome del progetto (seguito dalla versione), ma contiene
+		piu\` sorgenti diversi (le working dirs sono reali e non link)
+" >&2
+	exit 1
+}
+
+
+
+check_dir()
+{
+	local dir="$1"
+
+	[ -L "$dir" ] && {
+		_jt_error 1 "'$dir' should be a directory, is a LINK"
+		$F_REPAIR && rm -f "$dir"
+	}
+	[ -d "$dir" ] || {
+		$F_REPAIR && {
+			_jt_echo " creating '$dir'"
+			mkdir "$dir" || exit $?
+		}
+	}
+	[ -d "$dir" ] || {
+		_jt_error 1 "missing directory: $dir"
+		Status=1
+	}
+}
+
+check_linkdir()
+{
+	local dir="$1"
+	local mustlink="$2"
+	local linked=
+
+	# is linked to the right dir?
+	[ -L "$dir" ] && {
+		linked=`ls -ld "$dir" | sed -e 's/.* -> //'`
+	}
+	if [ "$linked" ] # is a link
+	then
+		[ "$linked" != "$mustlink" ] && {
+			_jt_echo " warning, $dir is linked to the wrong directory ($linked)"
+			$F_REPAIR && rm -f "$PRJ/$dir"
+		}
+	else
+		[ -d "$dir" ] && {
+			_jt_echo " warning, $dir should be a link and is a DIRECTORY"
+			$F_REPAIR && {
+				rmdir "$dir" || {
+					_jt_error 1 "can't remove non-empty dir '$dir'"
+					Status=1
+					return 1
+				}
+			}
+		}
+		[ -d "$dir" ] && {
+			_jt_echo " warning, $dir should be a link and is a FILE"
+			$F_REPAIR && {
+				mv  "$dir" "$dir.moved" || {
+					_jt_error 1 "can't rename '$dir' -> '$dir.moved'"
+					Status=1
+					return 1
+				}
+			}
+		}
+	fi
+	[ -L "$dir" ] || {
+ 		ln -s "$mustlink" "$dir" || exit $?
+	}
+}
+
+
+# (MAIN)
+
+umask 007
+
+# defaults
+#
+F_REPAIR=false
+F_DEPTH=false
+F_BE_NICE=false
+F_MULTIPLESOURCES=false
+
+while [ $# != 0 ]
+do
+	case $1 in
+	  -q|--quiet)	VERBOSE=false ;;
+	  --repair)	F_REPAIR=true ;;
+	  --depth)	F_DEPTH=true ;;
+	  --multisource) F_MULTIPLESOURCES=true ;;
+	  --w)		F_BE_NICE=true ;;
+	  -*|"")	usage ;;
+	  *)		usage ;;
+	esac
+	shift
+done
+
+Status=0
+
+
+# CONTROLLI MANDATORI
+
+# controlla presenza directories
+#
+## == directories mandatorie ==
+##
+## Queste directories sono necessarie ai tools di gestione, e
+## devono essere presenti (sono tutte riferite alla directory
+## principale di progetto):
+##
+##  * nomeprogetto-VER (la source dir)
+##  * bin, docs, lib, etc (link simbolici alle stesse sotto quella source)
+##  * lib/templates, etc/nomeprogetto, etc/templates
+##
+## la directory '''nomeprogetto-VER''' e` quella dei sorgenti, se
+## non esiste viene creata, e le altre directories linkate a questa
+##
+_jt_echo " checking dirs ... "
+
+src=`(cd $PRJ ; ls -d ${PRJNAME}-[0-9]* 2>/dev/null | tail -1)`
+[ "$src" == "" ] && {
+	src="${PRJNAME}-1.0"
+}
+
+# dir principale
+check_dir $PRJ
+
+# sorgente uguale al progetto o multipli?
+if $F_MULTIPLESOURCES
+then
+	check_dir	$PRJ/bin
+	check_dir	$PRJ/etc
+	check_dir	$PRJ/lib
+	check_dir	$PRJ/docs
+else
+	check_dir	$PRJ/$src
+	check_dir	$PRJ/$src/bin
+	check_dir	$PRJ/$src/etc
+	check_dir	$PRJ/$src/lib
+	check_dir	$PRJ/$src/docs
+	check_linkdir	$PRJ/etc $src/bin
+	check_linkdir	$PRJ/etc $src/etc
+	check_linkdir	$PRJ/lib $src/etc
+	check_linkdir	$PRJ/docs $src/etc
+fi
+check_dir $PRJ/lib/templates
+check_dir $PRJ/etc/$PRJNAME
+check_dir $PRJ/etc/$PRJNAME/conf.d
+
+
+# CONTROLLI OPZIONALI
+#
+$F_DEPTH && {
+	# files
+	#
+	## == files opzionali ==
+	##
+	## Questi files sono utilizzati dai tools di gestione, ma possono anche
+	## non essere presenti:
+	##
+	##  * etc/desc: conteine testo di descrizione breve del progetto (1 riga)
+	##  * etc/info: contiene testi di descrizione lunga (max 1 pagina)
+	##
+	_jt_echo " checking optional files ..."
+
+	for file in desc info
+	do
+		[ -f $PRJ/etc/$file -a -s $PRJ/etc/$file ] || {
+			_jt_error 1 "missing or empty optional file: etc/$file"
+			Status=1
+			$F_REPAIR && {
+				tpl=`_jt_search_template $file 2>/dev/null`
+				if [ $? == 0 ]
+				then
+					_jt_echo " (repair) install template '$tpl' ..."
+					cp $tpl $PRJ/etc/$file
+					Status=$?
+				else
+					_jt_error 1 "template not found for file etc/$file"
+				fi
+			}
+		}
+	done
+}
+
+$F_BE_NICE && exit 0
+
+exit $Status

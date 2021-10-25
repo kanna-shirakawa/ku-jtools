@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.3"
+CMDSTR="$CMD v$CMDVER (2018/05)"
+
+set -e -u
+
+JTDEB_MAKE_OPTS=${JTDEB_MAKE_OPTS:-"-us -uc"}
+f_clean=true
+
+echo -e "\n$CMDSTR args: $@\n"
+
+[ "X${1:-}" = "X-nc" ] && {
+	f_clean=false
+}
+$f_clean && jtdeb-clean
+
+dpkg-checkbuilddeps
+
+echo -e "\ndpkg-buildpackage -rfakeroot $JTDEB_MAKE_OPTS $@\n"
+
+exec dpkg-buildpackage -rfakeroot $JTDEB_MAKE_OPTS "$@"

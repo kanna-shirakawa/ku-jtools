@@ -1,0 +1,251 @@
+#!/bin/bash
+#
+CMD=$(basename $0)
+set -e -u
+
+PRJ=${PRJ:-""}
+timefile="$PRJ/.prj_mtimes"
+
+usage()
+{
+	echo "
+usage: $CMD [options]
+
+options:
+ --lastpull file	works on files newer than 'file'
+ -a|--all		works on ALL files
+ -n|--dry-run		dry run
+ -q|--quiet		quiet
+ -v|--verbose		verbose
+ -c|--config file	use optional config 'file' (now: $configfile)
+ -D[n]|--debug[=n]	set debug, optionally with level
+
+" >&2
+	[ $# != 0 ] && echo -e "$*\n" >&2
+	exit 1
+}
+
+cleanup()
+{
+	$DEBUG || rm -f $tmpfilelist $tmpfilestats
+}
+
+ignorefile()
+{
+	case $1 in
+	 .git/*) return 0 ;;
+	 .prj_mtime) return 0 ;;
+	 Thumbs.db) return 0 ;;
+	esac
+	return 1
+}
+
+
+# (MAIN)
+
+. /lib/ku-base/echo.sh
+
+VERBOSE=true
+DEBUG=false
+dbglev=
+dbvflag=
+f_all=false
+f_exec=true
+lastpullfile=
+configfile=$PRJ/etc/$CMD
+
+# from configfile
+#
+FORCE_FILE_CHMOD="g+rwX"
+FORCE_DIR_CHMOD="g+rwXs"
+RESTORE_USER=true
+
+
+tmpfilelist=$(mktemp /tmp/$CMD-filelist-XXXXXX)
+tmpfilestats=$(mktemp /tmp/$CMD-filestats-XXXXXX)
+
+trap 'echo -e "\n*INTR*\n"; cleanup; exit 255' 1 2 3
+trap 'echo -e "\nunexpected error $? at $LINENO\n"' ERR
+trap 'cleanup' EXIT
+
+errors=false
+
+while [ $# != 0 ]
+do
+ case $1 in
+  -v|--verbose)	VERBOSE=true ;;
+  -q|--quiet)	VERBOSE=false ;;
+  -D|--debug)	VERBOSE=true; DEBUG=true ;;
+  -n|--dry-run)	f_exec=false ;;
+  -a|--all)	f_all=true ;;
+  -D[0-9]*|--debug=[0-9]*)
+  	VERBOSE=true
+	DEBUG=true
+	dbglev=$(echo "X$1" | sed -e 's/^X-D//' -e 's/^X--debug=//')
+	dbgflag=$1
+	;;
+  --lastpull)
+  	shift
+	[ $# == 0 ] && usage 'option --lastpull needs a filename'
+	[ -f "$1" ] || usage "option --lastpull: file not found '$1'"
+	lastpullfile=$1
+	;;
+  -c|--config)
+  	shift
+	[ $# == 0 ] && usage 'option --config needs a filename'
+	[ -f "$1" ] || usage "option --config: file not found '$1'"
+	configfile=$1
+	;;
+  -*|"")	usage "unknown option: '$1'" ;;
+  --)		break ;;
+  *)
+  	[ -f "$1" ] || {
+		echo "error, file not found: '$1'" >&2
+		errors=true
+	}
+	if ignorefile "$1"
+	then
+		echo "warn: ignored file '$1'" >&2
+	else
+		echo "$1" >>$tmpfilelist
+	fi
+	;;
+ esac
+ shift
+done
+
+# configfile (if exists)
+#
+[ -f $configfile ] && {
+	. $configfile
+}
+
+
+# sanity checks
+
+$errors && exit 1
+
+[ "$PRJ" == "" ] && usage "error, you need to be inside a project"
+
+[ -f $timefile ] || {
+	echo -e "\nerror, times file '$timefile' not found" >&2
+	echo -e "you need to run 'jtscm-save-mtimes' first\n" >&2
+	exit 1
+}
+cd $PRJ
+
+# have you a filelist? if not, we works on last pull date
+#
+[ -s $tmpfilelist ] || {
+	if [ "$lastpullfile" != "" ]
+	then
+		find . -type f -newer $lastpullfile | sed -e 's#^./##' | sort >$tmpfilelist
+	else
+		if $f_all
+		then
+			find . -type f | sed -e 's#^./##' | sort >$tmpfilelist
+		else
+			echo -e "\nerror, can't determine how files are new" >&2
+			echo -e "you need to either:\n" >&2
+			echo -e " . use the --all flag (to work on ALL files)" >&2
+			echo -e " . use the --lastpull option" >&2
+			echo -e " . pass a filelist\n" >&2
+			exit 1
+		fi
+	fi
+}
+
+
+# now run the rats ...
+
+while read fname
+do
+	ignorefile "$fname" && continue
+
+	$DEBUG && echocr " $fname"
+
+	mtime=$(grep "^$fname|" $timefile | cut -d'|' -f2)
+	[ "$mtime" == "" ] && {
+		echo "no-mtime: $fname"
+		continue
+	}
+	date=$(date --date="@$mtime" '+%Y.%m.%d-%H:%M:%S')
+	actual=$(stat --format '%Y' "$fname")
+
+	if [ $mtime != $actual ]
+	then
+		echo "$actual != $mtime: $date $fname"
+		if $f_exec
+		then
+			touch --date="@$mtime" "$fname"
+		else
+			echo "D> " touch --date="@$mtime" "$fname"
+		fi
+	fi
+
+	if [ -d "$fname" ]
+	then
+		if [ "X$FORCE_DIR_CHMOD" != "X" ]
+		then
+			if $f_exec
+			then
+				chmod -c -- $FORCE_DIR_CHMOD "$fname" || :
+			else
+				stat=$(stat --format '%a' "$fname")	# actual perms
+				touch $tmpfilestats
+				chmod $stat $tmpfilestats
+				chmod -- $FORCE_DIR_CHMOD $tmpfilestats
+				tmpstat=$(stat --format '%a' $tmpfilestats)
+				[ $tmpstat != $stat ] && {
+					echo "D> $tmpstat != $stat:" chmod -- $FORCE_DIR_CHMOD "$fname"
+				}
+			fi
+		fi
+	else
+		if [ "X$FORCE_FILE_CHMOD" != "X" ]
+		then
+			if $f_exec
+			then
+				chmod -c -- $FORCE_FILE_CHMOD "$fname" || :
+			else
+				stat=$(stat --format '%a' "$fname")	# actual perms
+				touch $tmpfilestats
+				chmod $stat $tmpfilestats
+				chmod -- $FORCE_FILE_CHMOD $tmpfilestats
+				tmpstat=$(stat --format '%a' $tmpfilestats)
+				[ $tmpstat != $stat ] && {
+					echo "D> $tmpstat != $stat:" chmod -- $FORCE_FILE_CHMOD "$fname"
+				}
+			fi
+		fi
+	fi
+
+	if [ "X$RESTORE_USER" == "Xyes" ]
+	then
+		user=$(grep "^$fname|" $timefile | cut -d'|' -f3)
+		[ "X$user" != "" ] && {
+			if getent passwd $user 2>/dev/null
+			then
+				stat=$(stat --format '%a' "$fname")	# actual perms
+				if $f_exec
+				then
+					chown $user "$fname" || :
+					chgrp --reference $(dirname "$fname") "$fname" || :
+					chmod $stat "$fname" || :
+				else
+					echo "D> " chown $user "$fname"
+					echo "D> " chgrp --reference $(dirname "$fname") "$fname"
+					echo "D> " chmod $stat "$fname"
+				fi
+			else
+				echo " chown ignored, user '$user' not exists for '$fname'"
+			fi
+
+		}
+	fi
+
+done <$tmpfilelist
+
+$DEBUG && echocr
+
+exit 0

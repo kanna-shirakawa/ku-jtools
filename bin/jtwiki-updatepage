@@ -1,0 +1,93 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=`basename $0`
+
+set -e
+set -u
+
+. jtfunctions.sh
+
+usage()
+{
+	echo "usage: $CMD name {inputfile | -}" >&2
+	exit 1
+}
+
+
+cleanup()
+{
+	rm -f $temp_input $parsed
+}
+
+
+# (MAIN)
+
+umask 007
+
+_jt_set_vars \
+	wiki.datapath \
+	wiki.bot_id
+
+
+case $# in
+	1)	name=$1; file="-" ;;
+	2)	name=$1; file=$2 ;;
+	*)	usage ;;
+esac
+filedes="$file"
+[ X"$file" == X- ] && filedes="(stdin)"
+
+_jt_valid_wiki_name "$name" || {
+	echo "error: invalid wiki page name '$name'" >&2
+	exit 1
+}
+
+[ -d $wiki_datapath ] || {
+	echo "error: wiki datapath '$wiki_datapath' not existent" >&2
+	exit 1
+}
+
+temp_input=`mktemp /tmp/$CMD-XXXXXXX`
+parsed=`mktemp /tmp/$CMD-parsed-XXXXXXXX`
+
+trap "cleanup; exit 127" 1 2 3
+
+
+[ X"$file" == X- ] && {
+	cat >$temp_input
+	file=$temp_input
+}
+
+[ -f "$file" -a -s "$file" ] || {
+	echo "error: file '$filedes' not found or empty" >&2
+	cleanup
+	exit 1
+}
+
+pagename=`_jt_normalize_wiki_name $name`
+
+wiki_path="$wiki_datapath/$pagename.txt"
+
+jtconf-parse "$file" | wiki-moin2foswiki >$parsed
+
+
+# create or update page?
+#
+tag=
+if [ ! -f $wiki_path ]
+then
+	tag="new"
+else
+	cmp $parsed $wiki_path >/dev/null 2>/dev/null || tag="upd"
+fi
+
+[ "$tag" != "" ] && {
+	echo "  $tag $pagename"
+	cat $parsed >$wiki_path
+}
+
+cleanup
+exit 0

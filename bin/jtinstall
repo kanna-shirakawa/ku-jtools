@@ -1,0 +1,867 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.10"
+CMDSTR="$CMD v$CMDVER (2020/09)"
+
+set -u
+set -e
+
+# fancy output utils
+. /lib/ku-base/echo.sh
+
+# ENV
+#
+export KU_BACKUP_DIR=${KU_BACKUP_DIR:-""}
+export KU_BACKUP_TYPE=${KU_BACKUP_TYPE:-"day"}
+export KU_INSTALL_USER=${KU_INSTALL_USER:-""}
+export KU_INSTALL_GROUP=${KU_INSTALL_GROUP:-""}
+export KU_INSTALL_MODE=${KU_INSTALL_MODE:-""}
+export KU_INSTALL_DIRMODE=${KU_INSTALL_DIRMODE:-""}
+export KU_TEMPDEFINES=${KU_TEMPDEFINES:-""}
+export VERBOSE=${VERBOSE:-"true"}
+export DEBUG=${DEBUG:-"false"}
+export TOOLKIT=${TOOLKIT:-$CMD}
+export PRJNAME=${PRJNAME:-""}
+export CHMOD=${CHMOD:-"chmod"}
+export CHOWN=${CHOWN:-"chown"}
+export CHGRP=${CHGRP:-"chgrp"}
+export CP=${CP:-"cp -f"}
+export MV=${MV:-"mv -f"}
+export RM=${RM:-"rm -f"}
+export TOUCH=${TOUCH:-touch}
+export MKDIR=${MKDIR:-"mkdir"}
+
+
+usage()
+{
+	echo "
+$CMDSTR == AUTOMATIC FILES INSTALL UTIL
+
+usage:	$CMD [options] file destination [owner [mode]]
+	$CMD [options] --input directive_file
+	$CMD --makeinput
+
+OPTIONS:
+  -v|--verbose	be verbose (default: $VERBOSE)
+  -q|--quiet	be quiet
+  -D|--debug	set debug
+  -n|--dry-run	don't do anything, only show actions
+
+  --fixperms	only fix permissions (don't install)
+
+  --sudo	use sudo
+
+  --backup dir	set backup directory (\$KU_BACKUP_DIR=$KU_BACKUP_DIR)
+  --bcktype tt	set backup type (\$KU_BACKUP_TYPE=$KU_BACKUP_TYPE)
+
+  --user user	set default user (\$KU_INSTALL_USER=$KU_INSTALL_USER)
+  --group group	set default group (\$KU_INSTALL_GROUP=$KU_INSTALL_GROUP)
+  --mode mode	set default file mode (\$KU_INSTALL_MODE=$KU_INSTALL_MODE)
+  --dirmode mm	set default dir mode (\$KU_INSTALL_DIRMODE=$KU_INSTALL_DIRMODE)
+
+  --parse	calls jtconf-parse on files before installing
+  --tempdefs fl	on parsing, pass file 'fl' as temporary storage for
+  		local defines (\$KU_TEMPDEFINES=$KU_TEMPDEFINES)
+  --include fl	include file 'fl' for definitions parsing, can be used
+  		multiple times (passes parms as-is to jtconf)
+
+  --inform	if any change is made and no errors occurred, the
+  		command exists with errcode 254 instead of 0, and
+		you make your decision about subsequent actions
+" >&2
+	exit 127
+}
+
+
+
+help()
+{
+	($CMD --usage) || :
+
+	echo "
+INVOCATIONS
+  file dest	single file installation, with optional owner and mode
+  		owner must be supplied as 'user:group'
+
+  --input file	use direction inside 'file' for multiple installs
+
+  --makeinput	create sample input file in current dir, existing files
+  		will not be overwritten: install, install.def and
+		Makefile; use this option to see some good examples
+
+RULES
+  * the destination directory path must be present
+
+  * if destination has trailing slash '/' is considered a directory
+    name, not a file, and the file will be copied in this directory
+    using the original filename (basename, not path)
+
+
+EXIT STATUS
+  0	the file(s) was successufull installed
+  127	usage error
+  254	the file(s) was not installed or modified (if --inform used)
+  *	any error during copy/chmod/chown etc
+
+
+ENVIRONMENT
+
+  KU_BACKUP_DIR (default: none)
+ 	if defined, place here a copy of original destination file
+	(if present), the full path of the file is replicated; the
+	copies will be numbered (and so not overwritten) using the
+	computation scheme defined by KU_BACKUP_NUMBERS (default
+	is 'day')
+
+  KU_BACKUP_TYPE (default: 'day')
+  	scheme used to compute progressive version numbers of backup
+	copies:
+
+	  day	current day in the form YYYYmmdd
+	  hour	current day+hour in the form YYYYmmmddd-HH
+	  prog	4 digits progressive number
+
+  KU_INSTALL_USER (default: none)
+  KU_INSTALL_GROUP (default: none)
+  	default user and group for installed file(s)
+
+  KU_INSTALL_MODE (default: none)
+  KU_INSTALL_DIRMODE (default: none)
+  	default perms for files and directories
+
+  KU_TEMPDEFINES (default: none)
+  	if parsing required, you can place local temporary definitions
+	into this file (or use --tempdefs option)
+
+  CHMOD, CHOWN, CHGRP, CP, MV, RM, TOUCH, MKDIR (default: system commands)
+  	commands for equivalent system commands
+
+  for parsing you can refer to 'jtconf-parse' manual page, basically you
+  should define at least this two variables:
+
+  TOOLKIT (now: $TOOLKIT)
+	set the filename(s) to be searched (\$TOOLKIT.conf, \$HOME/.$TOOLKIT)
+
+  PRJNAME (now: $PRJNAME)
+  	set the searchpath (/etc/\$PRJNAME/, /etc/\$PRJNAME/conf.d/,
+	\$HOME/.$PRJNAME/)
+
+" >&2
+	return 0
+}
+
+error()
+{
+	echo -e "\n$CMD error: $*\n"
+}
+
+
+cleanup()
+{
+	rm -f $TmpInstall $TmpInput
+}
+
+pdebug()
+{
+	$DEBUG && echo -e "#D ${FUNCNAME[1]}() $*" >&2
+	return 0
+}
+
+
+call_jtconf_parse()
+{
+	pdebug "jtconf-parse --simple $Dflag $JtIncludes $tempdefines $*"
+	jtconf-parse --simple $Dflag $JtIncludes $tempdefines "$@"
+}
+
+
+# compare two files (fast)
+# returns 1 if different, 0 if equal
+#
+compare()
+{
+	local out=
+	local exitstat=
+
+	[ -e "$1" ]		|| return 1	# no file1
+	[ -e "$2" ]		|| return 1	# no file2
+	local size1=`stat --dereference --format='%s' "$1"`
+	local size2=`stat --dereference --format='%s' "$2"`
+	pdebug "size: $size1 $1"
+	pdebug "size: $size2 $2"
+	[ $size1 = $size2 ]	|| return 1	# size
+	out=$(cmp "$1" "$2" 2>&1)
+	exitstat=$?
+	pdebug "cmp: $exitstat"
+	return $exitstat
+}
+
+# 1: file
+# 2: owner:group
+#
+compareowner()
+{
+	local owner=
+
+	[ -e "$1" ]		|| return 1	# no file
+	owner=$(stat --dereference --format='%U:%G' "$1")
+	pdebug "owner: $owner $1"
+	pdebug "owner: $2 (reference)"
+	[ "X$2" = "X$owner" ]	|| return 1
+	return 0
+}
+
+# 1: file
+# 2: modes
+#
+comparemodes()
+{
+	local modes=
+
+	[ -e "$1" ]		|| return 1	# no file
+	modes=$(stat --dereference --format='%a' "$1")
+	pdebug "modes: $modes $1"
+	pdebug "modes: $2 (reference)"
+	[ "X$2" = "X$modes" ]	|| return 1
+	return 0
+}
+
+# 1: file
+# 2: mtime (seconds since epoch)
+#
+comparemtime()
+{
+	local mtime=
+
+	[ -e "$1" ]		|| return 1	# no file
+	mtime=$(stat --dereference --format='%Y' "$1")
+	pdebug "mtime: $mtime $1"
+	pdebug "mtime: $2 (reference)"
+	[ "X$2" = "X$mtime" ]	|| return 1
+	return 0
+}
+
+
+installfile()
+{
+	local file="$1"
+	local dest="$2"
+	local owner=${3:-""}
+	local perms=${4:-""}
+	local f_parse=${5:-"false"}
+
+	local backup=
+	local dir=
+	local tempdefines=
+	local install_from=
+	local install_cmd=
+
+	# destination, file or directory?
+	#
+	if [ -d "$dest" ]
+	then
+		if echo "$dest" | grep -q "/$"
+		then
+			dest="$dest`basename \"$file\"`"
+		else
+			error "destination '$dest' is a directory"
+			return 1
+		fi
+	else
+		if echo "$dest" | grep -q "/$"
+		then
+			error	"error: you asked to install '$file' into '$dest'\n" \
+				"but destination is not a directory"
+			return 1
+		fi
+	fi
+
+	echocr " checking '$dest' ... \r"
+
+	backup=`set_backup_filename "$dest"` || return 1
+
+	$f_parse && {
+		if [ -f "$file" ]
+		then
+			case `file "$file"` in
+				*text*)	;;
+				*)	f_parse=false ;;
+			esac
+		else
+			f_parse=false
+		fi
+	}
+
+	# temporary database definitions for parsing?
+	#
+	[ "$KU_TEMPDEFINES" != "" -a -f "$KU_TEMPDEFINES" ] && {
+		if echo "$KU_TEMPDEFINES" | grep -q "^/"
+		then
+			tempdefines="--include $KU_TEMPDEFINES"
+		else
+			tempdefines="--include `pwd`/$KU_TEMPDEFINES"
+		fi
+	}
+
+	install_from="$file"
+	install_cmd="$CP"
+
+	$f_parse && {
+		call_jtconf_parse "$file" > "$TmpInstall" || {
+			error "install of '$dest' failed, error parsing"
+			return 1
+		}
+		install_from="$TmpInstall"
+		install_cmd="$MV"
+	}
+
+	compare "$install_from" "$dest" && {
+		rm -f "$TmpInstall"
+		echocr
+		fixperms "$dest" "$owner" "$perms" "$file" $VERBOSE
+		return 0
+	}
+
+	echocr
+
+	$VERBOSE && {
+		echo " inst '$file' $perms $owner" >&2
+		echo "  --> '$dest'" >&2
+	}
+
+	ChangesMade=true
+
+	# backup?
+	[ "$backup" != "" -a -f "$dest" -a ! -f "$backup" ] && {
+    		$VERBOSE && echo "  bck '$backup'" >&2
+		dir=`dirname $backup`
+		[ -d "$dir" ] || $MKDIR -p "$dir"
+		$MV "$dest" "$backup" || return 1
+	}
+
+	[ -e "$dest" ] && $RM "$dest"
+
+	$install_cmd "$install_from" "$dest" || {
+		error "installing file"
+		return 1
+	}
+	fixperms "$dest" "$owner" "$perms" "${backup:-$file}" false
+
+	return 0
+}
+
+
+
+
+fixperms()
+{
+	local dest=$1
+	local owner=${2:-$_DefaultOwner}
+	local perms=${3:-$_DefaultPerms}
+	local reference=${4:-""}
+	local verbose=${5:-$VERBOSE}
+
+	local defaultowner=$KU_INSTALL_USER
+	local chown=$CHOWN
+
+	local before=
+	local after=
+	local tperms=
+	local towner=
+	local tmtime=
+	local need_fix=false
+
+	[ -e "$dest" ] || {
+		$F_Exec || return 0	# nop
+		error "(fixperms) file/dir '$dest' not found"
+		return 1
+	}
+
+	# stores temp stats to show changes, if any
+	#
+	tperms=`stat --dereference --format '%a' "$dest"`
+	towner=`stat --dereference --format '%U:%G' "$dest"`
+	tmtime=$(stat --dereference --format '%Y' "$dest"); tmtime=$(date '+%Y%m%d-%H%M%S' --date "@$tmtime")
+	before=`printf "%4s %-16s %s" "$tperms" "$towner" "$tmtime"`
+
+	[ "$KU_INSTALL_GROUP" != "" ] && {
+		if [ "$defaultowner" = "" ]
+		then
+			chown=$CHGRP
+			defaultowner=$KU_INSTALL_GROUP
+		else
+			defaultowner="$defaultowner:$KU_INSTALL_GROUP"
+		fi
+	}
+	[ -e "$reference" ] || reference=
+
+	if [ "$owner" = "" ]
+	then
+		if [ "$reference" != "" ]
+		then
+			compareowner "$dest" $(stat --dereference --format='%U:%G' "$reference") || {
+				$CHOWN --reference="$reference" "$dest" || return $?
+			}
+		elif [ "$defaultowner" != "" ]
+		then
+			compareowner "$dest" "$defaultowner" || {
+				$chown $defaultowner "$dest" || return $?
+			}
+		fi
+	else
+		compareowner "$dest" "$owner" || {
+			$CHOWN $owner "$dest" || return $?
+		}
+	fi
+
+	if [ "$perms" = "" ]
+	then
+		if [ "$reference" != "" ]
+		then
+			comparemodes "$dest" $(stat --dereference --format='%a' "$reference") || {
+				$CHMOD --reference="$reference" "$dest" || return $?
+			}
+		elif [ "$KU_INSTALL_MODE" != "" ]
+		then
+			if [ -d "$dest" ]
+			then
+				comparemodes "$dest" $KU_INSTALL_DIRMODE || {
+					$CHMOD $KU_INSTALL_DIRMODE "$dest" || return $?
+				}
+			else
+				comparemodes "$dest" $KU_INSTALL_MODE || {
+					$CHMOD $KU_INSTALL_MODE "$dest" || return $?
+				}
+			fi
+		fi
+	else
+		comparemodes "$dest" $perms || {
+			$CHMOD $perms "$dest" || return $?
+		}
+	fi
+
+	# lc 2020.09.21 - retains original mtime
+	[ "X$reference" != "X" ] && {
+		comparemtime "$dest" $(stat --dereference --format='%Y' "$reference") || {
+			$TOUCH --reference="$reference" "$dest" || return $?
+		}
+	}
+
+	tperms=`stat --dereference --format '%a' "$dest"`
+	towner=`stat --dereference --format '%U:%G' "$dest"`
+	tmtime=$(stat --dereference --format '%Y' "$dest"); tmtime=$(date '+%Y%m%d-%H%M%S' --date "@$tmtime")
+	after=`printf "%4s %-16s %s" "$tperms" "$towner" "$tmtime"`
+
+	[ X"$before" != X"$after" ] && {
+		ChangesMade=true
+		$verbose && {
+			echo "  warn: $before $dest" >&2
+			echo "   new: $after (permissions/mtime changed)" >&2
+		}
+	}
+	return 0
+}
+
+
+set_backup_filename()
+{
+	local dest=$1
+	local num=
+	local prev=
+
+	[ "$KU_BACKUP_DIR" = "" ] && return 0
+
+	case $KU_BACKUP_TYPE in
+	  day)	echo "$KU_BACKUP_DIR/$dest.`date '+%Y%m%d'`" ;;
+	  hour)	echo "$KU_BACKUP_DIR/$dest.`date '+%Y%m%d-%H'`" ;;
+	  prog)
+	  	prev=`ls "$KU_BACKUP_DIR/$dest."[0-9][0-9][0-9][0-9] 2>/dev/null | tail -1`
+		if [ "$prev" = "" ]
+		then
+			num="0000"
+		else
+			num=`echo "$prev" | sed -e 's/.*\.\(....\)$/\1/'`
+			num=`echo "$num+1" | dc`
+			num=`printf "%04d" $num`
+		fi
+		echo "$KU_BACKUP_DIR/$dest.$num"
+		;;
+	  *)	echo "\$KU_BACKUP_TYPE: wrong type '$KU_BACKUP_TYPE'" >&2
+	  	return 1
+		;;
+	esac
+	return 0
+}
+
+
+
+
+parse_installfile()
+{
+	local file=
+	local tempdefines=
+
+	# temporary database definitions for parsing?
+	#
+	[ "$KU_TEMPDEFINES" != "" -a -f "$KU_TEMPDEFINES" ] && {
+		if echo "$KU_TEMPDEFINES" | grep -q "^/"
+		then
+			tempdefines="--include $KU_TEMPDEFINES"
+		else
+			tempdefines="--include `pwd`/$KU_TEMPDEFINES"
+		fi
+	}
+
+	for file
+	do
+		if $F_Parse
+		then
+			sed -e 's/ *#.*//' -e '/^ *$/d' "$file" | call_jtconf_parse -
+		else
+			sed -e 's/ *#.*//' -e '/^ *$/d' "$file"
+		fi
+	done
+}
+
+
+parse_inputfile()
+{
+	local inputfile=$1
+
+	local default_owner=
+	local default_mode=
+	local default_parse=$F_Parse
+	local files=
+	local file=
+	local dest=
+	local owner=
+	local perms=
+	local parseflag=
+	local verbose=
+
+	# parse anche dell'install file stesso
+	#
+	parse_installfile $inputfile >$TmpInput || return $?
+
+	exec 9<&0 <$TmpInput
+	while read file dest owner perms parseflag
+	do
+		case "$parseflag" in
+			noparse|NOPARSE|false)	parseflag=false ;;
+			parse|PARSE|true)	parseflag=true ;;
+			*)			parseflag=$default_parse ;;
+		esac
+
+		case "$file" in
+			:default_owner)
+				default_owner=$dest; continue ;;
+			:default_mode)
+				default_mode=$dest; continue ;;
+			:parse)
+				default_parse=true ; continue ;;
+			:noparse)
+				default_parse=false ; continue ;;
+			:dir)
+				verbose=$VERBOSE
+				[ -d $dest ] || {
+					echo " creating dir '$dest'"
+					verbose=false
+					$MKDIR $dest || return $?
+				}
+				# permissions, uses default_owner but not default_perms, if perms
+				# ar not explicit, uses parent dir as reference
+				#
+				owner=${owner:-$default_owner}
+				fixperms $dest "$owner" "$perms" "`dirname $dest`" $verbose || return $?
+				continue
+				;;
+
+			# external dir: owned by another module/package, so created if not
+			# exists (to allow files installation), but don't change perms if exists
+			#
+			:extdir)
+				[ -d $dest ] || {
+					#owner=${owner:-"root:root"}
+					#perms=${perms:-"0775"}
+					$MKDIR $dest || return $?
+					fixperms $dest "" "" "`dirname $dest`" $VERBOSE || return $?
+				}
+				continue
+				;;
+			:link)
+				# dest is really the source, owner is target
+				jtlink --inform $Dflag $Vflag "$dest" "$owner"
+				case $? in
+				  0)	;; # OK
+				  254)	ChanghesMade=true ;;
+				  *)	return $?
+				esac
+				continue
+				;;
+			:*)
+				echo "unknown pragma directive: $file"
+				return 1
+				;;
+			"")
+				continue
+				;;
+		esac
+
+		owner=${owner:-$default_owner}
+		perms=${perms:-$default_mode}
+
+		files=$(eval ls $file 2>/dev/null) || :
+
+		[ "$files" = "" ] && {
+			echo "can't find file: '$file'" >&2
+			return 1
+		}
+
+		for file in $files
+		do
+			installfile $file $dest "$owner" "$perms" $parseflag || return $?
+		done
+	done
+	exec 0<&9 9<&-
+
+	return 0
+}
+
+
+
+make_inputfile()
+{
+	local out="$1"
+	local defs="$1.def"
+	local mkfile="Makefile"
+
+	if [ -e "$mkfile" ]
+	then
+		echo "  default '$mkfile' already exists, don't owerwrite" >&2
+	else
+		echo "  creating default '$mkfile'" >&2
+		echo '# sample makefile for '$CMD' invocation
+all:
+	# consider using --sudo parm too, but be carefull, test with -n first!
+	# simple run
+	'$CMD' --input '$out'
+	# run with jtconf variable parsing
+	#'$CMD' --parse --tempdefs '$defs' --input '$out'
+	# the same, but add myprog definitions (ie: /etc/myprog/myprog.conf) to parsing
+	#TOOLKIT=myprog '$CMD' --parse --tempdefs '$defs' --input '$out'
+' >"$mkfile"
+	fi
+
+	if [ -e "$out" ]
+	then
+		echo "  inputfile '$out' already exists, don't owerwrite" >&2
+	else
+		echo "  creating default inputfile '$out'" >&2
+
+		echo '# sample inputfile for $CMD
+
+# these lines set default owner and modes for subsequent files
+#
+:default_owner	user:group
+:default_mode	664
+
+# directory creation, with default perms and explicit perms
+#
+:dir /some/dir
+:dir /some/dir2 someuser:somegroup 2770
+
+# files
+
+# same name (target is a directory), default perms
+file1		/some/dir/
+
+# with different name, default perms
+file2		/some/dir/another_filename
+
+# same name, explicit perms
+file3		/some/dir/ someuser:somegroup 600
+
+# symlinks
+:link		sourcefile targetfile
+:link		sourcefile /some/dir/
+
+# multiple (glob) files
+files-*.{png,jpg}	/some/dir/
+
+# these lines uses jtconf variable parsing (see '$defs' for details)
+# you need to call '$CMD' with --parse parm
+#
+#file-to-parse1			::myprog.mydir::/
+#file-::myprog.version::	::myprog.mydir::/
+
+' >"$out"
+	fi # [ -e $out ]
+
+	if [ -e "$defs" ]
+	then
+		echo "  definitions file '$defs' already exists, don't owerwrite" >&2
+	else
+		echo "  creating default definitions file '$defs'" >&2
+		echo "    - remove it if not needed (you don't use --parse option)" >&2
+
+		echo '# sample definitions file for '$CMD'
+# using both --parse and --tempdefs '$defs' options
+#
+# you may set and export $TOOLKIT and $PRJNAME vars too (see jtconf
+# and jtconf-parse manpages)
+#
+[myprog]
+  mydir		/some/path
+  version	1.2.3
+
+' >"$defs"
+	fi # [ -e $defs ]
+}
+
+
+
+
+# (MAIN)
+
+Dflag=
+Vflag="--verbose"
+DummyTag=
+F_Exec=true
+F_OnlyPerms=false
+F_Sudo=false
+F_Parse=false
+F_Inform=false
+F_MakeInput=false
+JtIncludes=
+inputfile=
+_DefaultOwner=
+_DefaultPerms=
+ChangesMade=false
+
+while [ $# != 0 ]
+do
+  case $1 in
+    -v|--verbose)	VERBOSE=true; Vflag="--verboe" ;;
+    -q|--quiet)		VERBOSE=false; Vflag="--quiet" ;;
+    -D|--debug)		DEBUG=true ; Dflag="--debug"
+    			[ $# != 1 ] && {
+				echo "$2" | grep -q '^[0-9]$' && {
+					Dflag="--debug $2"
+					shift
+				}
+			}
+			;;
+    -n|--dry-run)	F_Exec=false ; DummyTag="(nop)" ;;
+    --usage)		usage ;;
+    --help)		help ; exit 0 ;;
+    --fixperms)		F_OnlyPerms=true ;;
+    --sudo)		F_Sudo=true ;;
+    --parse)		F_Parse=true ;;
+    --inform)		F_Inform=true ;;
+    --makeinput)	F_MakeInput=true ;;
+    --backup)		[ $# = 1 ] && usage "$1 needs a param"
+			shift; KU_BACKUP_DIR=$1 ;;
+    --bcktype)		[ $# = 1 ] && usage "$1 needs a param"
+			shift; KU_BACKUP_TYPE=$1 ;;
+    --user)		[ $# = 1 ] && usage "$1 needs a param"
+   			shift; KU_INSTALL_USER=$1 ;;
+    --group)		[ $# = 1 ] && usage "$1 needs a param"
+    			shift; KU_INSTALL_GROUP=$1 ;;
+    --mode)		[ $# = 1 ] && usage "$1 needs a param"
+    			shift; KU_INSTALL_MODE=$1 ;;
+    --dirmode)		[ $# = 1 ] && usage "$1 needs a param"
+    			shift; KU_INSTALL_DIRMODE=$1 ;;
+    --tempdefs)		[ $# = 1 ] && usage "$1 needs a param"
+    			shift; KU_TEMPDEFINES=$1 ;;
+    --input)		[ $# = 1 ] && usage "$1 needs a param"
+    			shift; inputfile=$1 ;;
+    --include)		[ $# = 1 ] && usage "$1 needs a param"
+    			shift;
+			case "$1" in
+			  *\ *)	usage "sorry, spaces not allowed in include files" ;;
+			  /*)	JtIncludes="$JtIncludes --include $1" ;;
+			  *)	JtIncludes="$JtIncludes --include `pwd`/$1" ;;
+			esac
+			;;
+    --)			break ;;
+    -*|"")		usage "unkown option: $1" ;;
+    *)			break ;;
+  esac
+  shift
+done
+
+$F_Sudo && {
+	CHOWN="sudo $CHOWN"
+	CHMOD="sudo $CHMOD"
+	CHGRP="sudo $CHGRP"
+	CP="sudo $CP"
+	MV="sudo $MV"
+	RM="sudo $RM"
+	MKDIR="sudo $MKDIR"
+	TOUCH="sudo $TOUCH"
+}
+$F_Exec || {
+	CHOWN="echo $DummyTag $CHOWN"
+	CHMOD="echo $DummyTag $CHMOD"
+	CHGRP="echo $DummyTag $CHGRP"
+	CP="echo $DummyTag $CP"
+	MV="echo $DummyTag $MV"
+	RM="echo $DummyTag $RM"
+	MKDIR="echo $DummyTag $MKDIR"
+	TOUCH="echo $DummyTag $TOUCH"
+}
+
+
+# makeinput mode?
+#
+$F_MakeInput && {
+	make_inputfile ${inputfile:-"install"}
+	exit $?
+}
+
+TmpInstall=`mktemp /tmp/$CMD-inst-XXXXXXXXXX` || exit 1
+TmpInput=`mktemp /tmp/$CMD-input-XXXXXXXXXX` || exit 1
+
+trap "echo '*INTR*'; cleanup; exit 255" 1 2 3
+trap "cleanup" EXIT
+
+
+# inputfile mode?
+#
+if [ "$inputfile" != "" ]
+then
+	[ $# != 0 ] && usage "too many parms in 'inputfile' mode: $*"
+	parse_inputfile $inputfile
+	stat=$?
+else
+	# single file mode
+	#
+	[ $# -lt 2 -o $# -gt 4 ] && usage "single file mode, wrong number of parms"
+	if $F_OnlyPerms
+	then
+		fixperms "$@"
+		stat=$?
+	else
+		src=$1
+		dest=$2
+		owner=
+		mode=
+		[ $# = 3 ] && owner=$3
+		[ $# = 4 ] && { owner=$3; mode=$4; }
+		installfile "$src" "$dest" "$owner" "$mode" $F_Parse
+		stat=$?
+	fi
+fi
+
+$F_Inform && {
+	[ $stat = 0 ] && {
+		$ChangesMade && stat=254
+	}
+}
+
+cleanup
+exit $stat

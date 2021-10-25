@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.1"
+CMDSTR="$CMD v$CMDVER (2018/03)"
+
+set -e -u
+
+echo -e "\n$CMDSTR args: $@\n"
+
+[ -f debian/rules ] || {
+	echo "error: file 'debian/rules' not found" >&2
+	echo "are you in the package directory?" >&2
+	exit 1
+}
+
+fakeroot make -f debian/rules clean
+
+DESTDIR=$(pwd)/debian/tmp
+
+for makefile in Makefile ku/Makefile
+do
+	[ -f "$makefile" ] && {
+		echo -e "\n running make using '$makefile'\n"
+		make -f "$makefile" clean DESTDIR="$DESTDIR"
+		break
+	}
+done
+
+exit 0

@@ -1,0 +1,299 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=`basename $0`
+
+. jtfunctions.sh
+
+
+# (FUNCTIONS)
+
+usage()
+{
+	echo -e "
+usage:	$CMD [options] schema
+	$CMD [options] --auto
+
+options:
+  --reduce	do reduction instead of expansion
+  --hooks	create hooks scripts
+  --no-hooks	remove hooks scripts
+
+schemas: " `ls $skeldir` "\n" >&2
+	exit 1
+}
+
+vecho()
+{
+	$VERBOSE && echo -e "$@"
+}
+
+err()
+{
+	echo -e "ERR " "$@" >&2
+}
+
+decho()
+{
+	$DEBUG && echo -e "D> $@" >&2
+}
+
+search_auto_schema()
+{
+	local here=`pwd`
+	local herename=`basename $here`
+	local skelpath=
+	local path=
+	local dir=
+	local opt=
+
+	if [ $here == $PRJ ]
+	then
+		# main project dir
+		#
+		here="(main_prj)"
+	else
+		# relativize pwd by main project path
+		here=`echo "$here" | sed -e "s#$PRJ/##"`
+	fi
+
+	[ -d $skeldir/$here ] || {
+		# search for optional (subtree) schema
+		#
+		path=$here
+		dir=
+		while [ "$path" != "$dir" ]
+		do
+			dir=`basename $path`
+			path=`dirname $path`
+			decho "looking for $skeldir/$path/optional"
+			[ -f $skeldir/$path/optional ] && {
+				here=$dir
+				opt="(optional subtree)"
+				break
+			}
+		done
+	}
+	[ -d $skeldir/$here ] || {
+		err "can't find '$here' in schema dir"
+		return 1
+	}
+
+	decho "found dir '$here' in schema dir $opt"
+
+	echo $here
+}
+
+create_hooks()
+{
+	local schema="$1"
+	local dir=
+	local hook=
+	local hooks=
+	local opt=
+	local pause="echo -n 'press return '; read x"
+	local have_dirs=
+	local check=
+	local schemadir=
+
+	decho "create hooks pwd=`pwd` schema=$schema"
+
+	vecho -n "(creating hooks) ... "
+	for dir in `find . -type d -print`
+	do
+
+		schemadir="$skeldir/$schema/$dir"
+
+		[ -d $schemadir ] || continue
+
+		hooks="expand reduce"			# default hooks
+
+		decho "process dir $dir schemadir=$schemadir"
+
+		if [ -f $schemadir/hooks ]
+		then
+			hooks=`cat $schemadir/hooks`	# override hooks
+		else
+			have_dirs=false
+			for check in `(cd $schemadir ; ls)`
+			do
+				[ -d $schemadir/$check ] && {
+					have_dirs=true
+					break
+				}
+			done
+			$have_dirs || {
+				decho "no dirs, no expand in $schemadir"
+				continue		# no dirs and no overrides
+							# nothing to expand
+			}
+		fi
+
+		decho "hooks $hooks in $dir"
+
+		for hook in $hooks
+		do
+			case $hook in
+			  expand)
+			  	hook=$dir/_expand
+			  	echo "#!/bin/bash"			>$hook
+			  	echo "jtexpand --auto --hooks"	>>$hook
+				echo "$pause"				>>$hook
+				chmod 0775 $hook 2>/dev/null
+				;;
+			  reduce)
+			  	hook=$dir/_reduce
+			  	echo "#!/bin/bash"			>$hook
+			  	echo "jtexpand --auto --reduce"	>>$hook
+				echo "$pause"				>>$hook
+				chmod 0775 $hook 2>/dev/null
+				;;
+			  create_optional)
+			  	[ -f $schemadir/optional ] || {
+					err " no '$schemadir/optional' file found"
+					continue
+				}
+				for opt in `cat $schemadir/optional`
+				do
+					#[ -d $dir/$opt ] && continue
+			  		hook=$dir/_create_$opt
+			  		echo "#!/bin/bash"			>$hook
+					echo "jtexpand --hooks $opt"		>>$hook
+					echo "$pause"				>>$hook
+					chmod 0775 $hook 2>/dev/null
+				done
+				;;
+			   *)
+			   	err "unknown hook '$hook' for $dir"
+				;;
+			esac
+		done
+	done
+	return 0
+}
+
+remove_hooks()
+{
+	local here="$1"
+	local hook=
+	local dirs=
+
+	vecho -n "(removing hooks) ... "
+	for hook in '_expand' '_reduce' '_create_*'
+	do
+		# se auto non rimuove da leaf dir (current)
+		#
+		if $f_auto
+		then
+			dirs=`ls $here | grep -v "^$hook$"`
+		else
+			dirs=`ls $here`
+		fi
+		(cd $here ; find $dirs -type f -name "$hook" -exec rm {} \;)
+	done
+	return 0
+}
+
+
+
+# (MAIN)
+
+VERBOSE=true
+DEBUG=false
+f_auto=false
+f_hooks=false
+f_no_hooks=false
+f_reduce=false
+verboseflag="--verbose"
+here=`pwd`
+
+export PRJ=`jtdir --quiet --find --bazaar $here` || return $?
+
+# parse args
+#
+while [ $# != 0 ]
+do
+  case $1 in
+    -v|--verbose)	VERBOSE=true ;;
+    -q|--quiet)		VERBOSE=false ;;
+    -D|--debug)		DEBUG=true ;;
+    --auto)		f_auto=true ;;
+    --hooks)		f_hooks=true ;;
+    --reduce)		f_reduce=true ; f_no_hooks=true ;;
+    --)			shift; break ;;
+    -*|"")		usage ;;
+    *)			break ;;
+  esac
+  shift
+done
+
+# sanity checks
+#
+$VERBOSE && verboseflag="--verbose" || verboseflag="--quiet"
+$f_hooks && {
+	$f_no_hooks && {
+		err "can't use --hooks and --no-hooks togheter"
+		exit 1
+	}
+}
+
+# search skeldir (custom or default)
+#
+searchpath="__CONF__/skel __LIB__/skel"
+for dir in $searchpath
+do
+	[ -d $dir ] && {
+		skeldir=$dir
+		break
+	}
+done
+[ "$skeldir" == "" ] || {
+	echo "skeldir not found in $searchpath" >&2
+	exit 1
+}
+
+
+if $f_auto
+then
+	[ $# != 0 ] && usage
+	schema=`search_auto_schema` || exit $?
+	workdir=`pwd`
+	cd ..	# must be positioned in the parent dir to work
+else
+	[ $# != 1 ] && usage
+	schema=$1
+	workdir=$1
+fi
+
+[ -d "$skeldir/$schema" ] || {
+	err "unknown schema '$schema'"
+	exit 1
+}
+
+
+if $f_reduce
+then
+	vecho -n "  reducing '$schema' ... "
+	$f_no_hooks && remove_hooks $workdir
+	if $f_auto
+	then
+		# if called by auto, don't remove the leaf (current) dir
+		find $workdir/* -depth -type d -print0 | xargs -0 -n 1 rmdir 2>/dev/null
+	else
+		find $workdir -depth -type d -print0 | xargs -0 -n 1 rmdir 2>/dev/null
+	fi
+	vecho "ok"
+else
+	vecho -n "  expanding '$schema' ... "
+	here=`pwd`
+	dir=`basename $schema`
+	cd $skeldir/$schema/..
+	decho "pwd=$here copy=$dir from `pwd`"
+	find $dir -type d | cpio -pdm $here 2>/dev/null
+	cd $here/$dir
+	$f_hooks && create_hooks $schema
+	vecho "ok"
+fi
+exit 0

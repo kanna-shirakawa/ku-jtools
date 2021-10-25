@@ -1,0 +1,278 @@
+#!/usr/bin/perl -w
+#
+# __copy1__
+# __copy2__
+#
+use strict;
+
+# get common functions and set $Cmd var
+#
+my $Cmd = $0; if ($Cmd =~ /\//) { $Cmd =~ s/\/[^\/]+$//; } else { $Cmd = `pwd`; }
+unshift( @INC, $Cmd );
+$Cmd	= $0; $Cmd =~ s/.*\///;
+require "$Cmd-functions.pl";
+
+my $CmdVer	= "2.2";
+my $CmdStr	= "$Cmd v$CmdVer (2020/04)";
+
+# database object
+#
+my $CfgDB;
+
+
+# environment defaults
+#
+$ENV{'CONFDIR'}	= "$ENV{'HOME'}/.$Cmd"	if (!defined $ENV{'CONFDIR'});
+
+# temps
+#
+my $sect;
+my $key;
+my $value;
+my @out;
+
+my $function	= "";
+my $use_regexp	= 0;
+my @args;
+my @includes;
+my $f_parse	= 1;	# recursively expand variables
+my $f_flat	= 0;	# dump in flat format
+
+# proto
+#
+sub dump_vars($$@); sub dump_env(); sub show_value($@);
+
+Debug(0);
+
+while (scalar @ARGV) {
+	CASE: {
+		$_	= shift( @ARGV );
+		if ($_ eq "-D" || $_ eq "--debug") {
+			Debug( 1 );
+			last CASE;
+		}
+		if ($_ =~ /^-D[0-9]/ || $_ =~ /^--debug=[0-9]/) {
+			$_ =~ s/-D//;
+			$_ =~ s/--debug=//;
+			Debug( $_ );
+			last CASE;
+		}
+		if ($_ eq "--list") {
+			usage()		if ($function ne "");
+			$function	= "list";
+			last CASE;
+		}
+		if ($_ eq "--regexp") {
+			usage()		if ($function ne "list" &&
+						$function ne "dump");
+			$use_regexp	= 1;
+			last CASE;
+		}
+		if ($_ eq "--listvars") {
+			usage()		if ($function ne "");
+			$function	= "listvars";
+			last CASE;
+		}
+		if ($_ eq "--dump") {
+			usage()		if ($function ne "");
+			$function	= "dump";
+			last CASE;
+		}
+		if ($_ eq "--dumpenv") {
+			usage()		if ($function ne "");
+			$function	= "dumpenv";
+			last CASE;
+		}
+		if ($_ eq "-r" || $_ eq "--rundir") {
+			usage()		if (!scalar @ARGV || $ARGV[0] =~ /^-/);
+			$ENV{'RUNDIR'}	= shift( @ARGV );
+			last CASE;
+		}
+		if ($_ eq "-c" || $_ eq "--confdir") {
+			usage()		if (!scalar @ARGV || $ARGV[0] =~ /^-/);
+			$ENV{'CONFDIR'}	= shift( @ARGV );
+			last CASE;
+		}
+		if ($_ eq "-j" || $_ eq "--prjname") {
+			usage()		if (!scalar @ARGV || $ARGV[0] =~ /^-/);
+			$ENV{'PRJNAME'}	= shift( @ARGV );
+			last CASE;
+		}
+		if ($_ eq "-i" || $_ eq "--include") {
+			usage()		if (!scalar @ARGV || $ARGV[0] =~ /^-/);
+			push( @includes, $ARGV[0] );
+			shift(@ARGV);
+			last CASE;
+		}
+		if ($_ eq "-n" || $_ eq "--noparse") {
+			$f_parse = 0;
+			last CASE;
+		}
+		if ($_ eq "-t" || $_ eq "--flat") {
+			$f_flat = 1;
+			last CASE;
+		}
+		if ($_ eq "--vartag") {
+			usage()		if (!scalar @ARGV || $ARGV[0] =~ /^-/);
+			VarTag( shift(@ARGV) );
+			last CASE;
+		}
+		usage()	if ($_ =~ /^-/);
+
+		push( @args, $_ );
+	}
+}
+
+if ($function eq "dumpenv") {
+	dump_env();
+	exit( 0 );
+}
+
+# load defines
+#
+$CfgDB	= load_defines();
+
+# add includes (ignore errors)
+#
+foreach $_ (@includes) {
+	$CfgDB->read( $_ );
+}
+
+
+DOIT: {
+	if ($function eq "list") {
+		usage()	if (!@args);
+		@out	= list_sections( $CfgDB, $use_regexp, @args );
+		last DOIT;
+	}
+	if ($function eq "listvars") {
+		usage()	if (scalar @args != 1);
+		@out	= list_variables( $CfgDB, @args );
+		last DOIT;
+	}
+	if ($function eq "") {
+		usage() if (scalar @args != 1 && scalar @args != 2);
+		exit( !show_value( $CfgDB, @args ) );
+	}
+	if ($function eq "dump") {
+		usage()	if (!@args);
+		exit( !dump_vars( $CfgDB, $use_regexp, @args ) );
+	}
+}
+if (@out) {
+	print( join( "\n", sort @out ) . "\n" );
+	exit( 0 );
+}
+exit(1);
+
+
+
+# (FUNCTIONS)
+
+
+sub show_value($@)
+{
+	my $db		= shift @_;
+	my @args	= @_;
+	my ($key, $value);
+
+	# canonicalize variable name (key)
+	#
+	if (@args == 2) {
+		$key	= VarTag() . $args[0] . "." . $args[1] . VarTag();
+	} elsif (@args == 1) {
+		$key	= VarTag() . $args[0] . VarTag();
+	} else {
+		usage();
+	}
+
+	$value	= parse_buf( $CfgDB, $key, 0, 1, $f_parse );
+
+	# 2013.01 kanna
+	#	fixed correct unresolved, even on recursive parsing
+	#
+	#if ($value eq $key) {	# not resolved
+		#return( 0 );
+	#}
+	if (Unresolved()) {
+		return( 0 );
+	}
+
+	printf( "%s\n", $value );
+	return( 1 );
+}
+
+sub usage
+{
+	die "
+== $CmdStr == KU DATABASE QUERY UTIL ==
+
+usage:	$Cmd [options] section.variablename		(1)
+	$Cmd [options] section variablename		(2)
+	$Cmd [options] --list [--regexp] section_pattern
+	$Cmd [options] --dump [--regexp] section_pattern
+	$Cmd [options] --listvars section
+	$Cmd [options] --dumpenv
+
+options:
+  -r|--rundir		set rundir path (default is env \$RUNDIR)
+  -c|--confdir		set confdir path (default is env \$CONFDIR)
+  -j|--prjname		set project name (default is env \$PRJNAME)
+  -i|--include f	append file <f> to the search path (can be used many times)
+  -n|--noparse		do not recursively expand internal db variabiles
+  -t|--flat		dump in flat format (section embededd in var name)
+  -D[n]|--debug[=n]	activate debug mode (optional set debug level 1 .. 10)
+  --vartag string	use <string> as variable delimiter (default is '" . VarTag() . "')
+  			you can also use the alternative escaped vartag sequence '" . EscapedVarTag() . "'
+			that is always replaced by default vartag at the last
+			parsing stage
+
+ * both (1) & (2) formats allowed, sect.subsect varname or sect.subsect.varname
+
+ * list don't use (yet) regexp, but merely literal matches the pattern
+   (use blank \"\" pattern to list all sections)
+
+ * section_pattern matches initial substring part of section names, or
+   regexp if --regexp paramter is used
+\n";
+}
+
+
+sub dump_vars($$@)
+{
+	my ($db, $re, @parms)	= @_;
+	my ($sect,$var);
+
+	printf( "$CmdStr database dump, regexp=%d, match='%s'\n\n",
+		$re, $parms[0] );
+
+	foreach $sect (sort( list_sections( $db, $re, @parms ) )) {
+		printf( "\n[%s]\n", $sect )	if (!$f_flat);
+		foreach $var (sort( list_variables( $db, $sect ) )) {
+			if ($f_flat) {
+				printf( "%s.%s=%s\n", $sect, $var,
+					defined $db->value( $sect, $var ) ? 
+						$db->value( $sect, $var ) : "undef"
+					);
+			} else {
+				printf( "  %-14s  %s\n", $var, 
+					defined $db->value( $sect, $var ) ? 
+						$db->value( $sect, $var ) : "undef"
+					);
+			}
+		}
+	}
+	return 1;
+}
+
+sub dump_env()
+{
+	my $var;
+	foreach $var (qw/RUNDIR CONFDIR PRJNAME/) {
+		printf( "%s='%s'\n", $var,
+				defined $ENV{$var} ? 
+					$ENV{$var} : ""
+		);
+	}
+	return 1;
+}

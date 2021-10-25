@@ -1,0 +1,138 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+## tools,conf restituisce PATH ripulito e normalizzato
+##
+## == synopsis ==
+## === usage ===
+##  ::filename:: [-v] [-c]  [[path1:path2:...] path(s)]
+##
+## === options ===
+##
+##  . '''-v''' verbose
+##  . '''-c''' check dirs (rimuove directories inesistenti dal path)
+##
+## == descrizione ==
+##
+## Esamina l'elenco delle directories passate, oppure la variabile
+## $PATH se non viene passato nessun argomento, in questo caso
+## costruisce un path di ricerca dei comandi ($PATH) normalizzato,
+## ovvero mette sempre in questa sequenza le seguenti directories:
+##
+##  * $HOME/binw
+##  * $HOME/bin_<uname>  (comandi specifci per macchina) *** RIMUOVERE? ***
+##  * $HOME/bin/<processor>   ***QUESTA E` DA RIMUOVERE***
+##  * $HOME/bin  comandi personali
+##  * /usr/local/bin
+##
+## *** COMANDO PORTATO DAI MIEI TOOLS ****
+## *** CONTINUARE DOCUMENTAZIONE E MODIFICHE ****
+##
+
+usage()
+{
+	echo "
+	usage: $CMD [-v] [-c] [[path1:path2:...] path(s)]
+	
+		-v	verbose
+		-c	check dirs
+	"
+	exit 1
+}
+
+
+#	eval args
+#
+CMD=`basename $0`
+wpath=
+f_verbose=false
+f_check=false
+f_std_path=false
+
+
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	-v)	f_verbose=true
+		;;
+	-c)	f_check=true
+		;;
+	-*)	usage
+		;;
+	*)	wpath=$wpath:$1
+		;;
+	esac
+	shift
+done
+
+[ "$wpath" = "" ] && {
+	f_std_path=true
+	wpath=$PATH
+}
+
+
+#	update wpath, se standard path ($PATH) aggiunge sempre:
+#
+#	- $HOME/binw			work bin (per testing)
+#	- $HOME/bin_<nodename>		specifici per nodo
+#	- $HOME/bin/<processor>		specifici per processore
+#	- $HOME/bin			generici per utente (eg. shells)
+#	- /usr/local/bin		sempre benvoluta
+#
+$f_std_path && {
+	uname=`uname -n | sed -e 's/\..*//'`
+	wpath=$HOME/binw:$HOME/bin_$uname:$HOME/bin/$uname:$HOME/bin:/usr/local/bin:$wpath
+}
+
+$f_verbose && echocr "  squeezing path ..." >&2
+
+wpath=`
+	echo "$wpath" | awk -F":" '
+	BEGIN {
+		wpath		= ""
+		separator	= ""
+		done["."]	= 1;	# never add "." to PATH!!!
+	}
+	{
+		for (kk=1 ; kk<=NF ; kk++)
+			if (done[$kk] != 1) {
+				wpath		= wpath separator $kk
+				done[$kk]	= 1
+				separator	= ":"
+			} 
+	}
+	END {
+		print wpath
+	}
+	'
+`
+
+
+#	check dirs
+#
+$f_check && {
+	$f_verbose && echocr "  checking dirs " >&2
+	OIFS="$IFS"
+	IFS=":$IFS"
+	set $wpath
+	IFS="$OIFS"
+	wpath=
+
+	while [ $# != 0 ]
+	do
+		[ -d $1 -a -r $1 ] && wpath="$wpath:$1"
+		$f_verbose && echocl "." >&2
+		shift
+	done
+	wpath=`echo "$wpath" | sed -e 's/^://'`
+}
+
+
+#	returns cleaned path
+#
+$f_verbose && echocr
+echo $wpath
+exit 0

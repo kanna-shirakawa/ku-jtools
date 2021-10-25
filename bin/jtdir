@@ -1,0 +1,251 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD="jtdir"
+CMDVER="1.3"
+CMDSTR="$CMD v$CMDVER (2019/11)"
+
+. jtfunctions.sh
+
+usage()
+{
+	echo "
+== $CMDSTR == finds the main project directory path ==
+
+usage:	$CMD [options] project_name
+	$CMD --find [options]
+	$CMD --list [--fullpath] [searchpath]
+
+options:
+  -v|--verbose	be verbose
+  -q|--quiet	be quiet
+  -D|--debug	enable debug
+
+  -s|--strict	do more checks on project dir
+  -f|--find	search up dir tree to find main dir (implies -s)
+
+  -g|--git	requires to be a \"git checkout\"
+  -b|--bazaar	requires to be a \"bazaar checkout\"
+  -F|--fossil	requires to be a \"fossil opened checkout\"
+
+- searchpath in list mode is a list of dir paths, separated by columns ':',
+  default is from env var \$JTPATH:
+     $JTPATH
+" >&2
+	exit 1
+}
+
+is_a_project()
+{
+	local here="$1"
+	local dir=
+	local file=
+
+	[ -d "$here" ]	|| return 1
+	$f_strict	|| return 0	# not strict, is a dir, ok
+
+	here=$(normalize_path $here) || {
+		# not readable directory
+		return $?
+	}
+
+	$DEBUG && echo "@D strict checks requested" >&2
+
+	$f_bazaar && {
+		$DEBUG && echo "@D bazaar required, checking $here/.bzr directory" >&2
+		[ -d "$here/.bzr" ] && return 0
+		return 1	# not bazaar, not a project
+	}
+	$f_fossil && {
+		$DEBUG && echo "@D fossil required, checking $here/_FOSSIL_ file" >&2
+		[ -f "$here/_FOSSIL_" ] && return 0
+		return 1	# not fossil, not a project
+	}
+	$f_git && {
+		$DEBUG && echo "@D git required, checking $here/.git directory" >&2
+		[ -f "$here/.git" ] && return 0
+		return 1	# not git, not a project
+	}
+	for dir in .bzr .prj .git
+	do
+		[ -d "$here/$dir" ] && {
+			$DEBUG && echo "@D checking $here/$dir directory" >&2
+			_jt_echo " found (dir '$here/$dir')" >&2
+			return 0	# ok
+		}
+	done
+	for file in _FOSSIL_ etc/desc etc/infos
+	do
+		[ -f "$here/$file" ] && {
+			$DEBUG && echo "D@ checking $here/$file feil" >&2
+			_jt_echo " found (file '$here/$file')" >&2
+			return 0	# ok
+		}
+	done
+
+	return 1
+}
+
+
+
+search_project_dir()
+{
+	local prjname="$1"
+	local dir=
+
+	# ricerca progetto nel path
+	#
+	is_a_project "$prjname" && {
+		if echo "$prjname" | grep -q "^/"
+		then
+			dir="$prjname"
+		else
+			dir="$(pwd)/$prjname"
+		fi
+	}
+
+	[ "$dir" ] || {
+		_jt_echo -n " search prj '$prjname' ... " >&2
+		for path in $(echo $JTPATH | tr ':' ' ')
+		do
+			is_a_project "$path/$prjname" && {
+				dir="$path/$prjname"
+				_jt_echo " found '$dir'" >&2
+				break
+			}
+		done
+	}
+	_jt_echo "" >&2
+
+	[ -d "$dir" ] || {
+		echo " project '$prjname' not found in \$JTPATH" >&2
+		echo "       JTPATH is $JTPATH" >&2
+		return 1
+	}
+
+	normalize_path "$dir"
+	return 0
+}
+
+normalize_path()
+{
+	cd $1 2>/dev/null	|| return $?
+	pwd -P
+}
+
+
+search_upward()
+{
+	local dir="${1:-.}"
+
+	[ -d $dir ] || return 1	# error, not found
+
+	cd $dir
+
+	_jt_echo -n " searching upward from '$dir' ... " >&2
+	while :
+	do
+		is_a_project . && {
+			normalize_path .
+			return 0		# ok, found
+		}
+		cd ..
+		[ $(pwd -P) == "/" ] && break
+	done
+	_jt_echo "not found" >&2
+	return 1
+}
+
+
+list_projects()
+{
+	local path=${1:-}
+	local dir=
+	local subdir=
+	local save_ifs=$IFS
+
+	[ "X$path" = "X" ] && path=$JTPATH
+
+	IFS=":"
+	for dir in $(echo "$path")
+	do
+		IFS="$save_ifs"
+
+		case $dir in
+		  /*)	;;
+		  *)	dir=$(pwd)/$dir ;;
+		esac
+
+		# silently ignore not-existing dirs
+		[ -d "$dir" ] || continue
+
+		_jt_echo "  searching $dir ..."
+		for subdir in $( (cd "$dir" ; ls) )
+		do
+			[ -d "$dir/$subdir" ] || continue
+			is_a_project "$dir/$subdir" && {
+				if $F_fullpath
+				then
+					echo "$dir/$subdir"
+				else
+					basename "$dir/$subdir"
+				fi
+			}
+		done
+	done
+	return 0
+}
+
+
+# (MAIN)
+
+VERBOSE=$JTVERBOSE
+f_list=false
+f_strict=false
+f_find=false
+f_bazaar=false
+f_fossil=false
+f_git=false
+F_fullpath=false
+prjname=
+prjdir=
+
+while [ $# != 0 ]
+do
+	case $1 in
+	  -v|--verbose)	VERBOSE=true ;;
+	  -q|--quiet)	VERBOSE=false ;;
+	  -D|--debug)	VERBOSE=true; DEBUG=true ;;
+	  -s|--strict)	f_strict=true ;;
+	  -b|--bazaar)	f_bazaar=true ; f_strict=true ;;
+	  -F|--fossil)	f_fossil=true ; f_strict=true ;;
+	  -g|--git)	f_git=true ; f_strict=true ;;
+	  -f|--find)	f_find=true ; f_strict=true ;;
+	  -l|--list)	f_list=true; f_strict=true  ;;
+	  --fullpath)	F_fullpath=true ;;
+	  --)		break ;;
+	  -*|"")	usage ;;
+	  *)		break ;;
+	esac
+	shift
+done
+
+stat=0
+
+$f_list && {
+	[ $# -gt 1 ] && usage
+	list_projects "$1"
+	exit 0
+}
+
+if $f_find
+then
+	[ $# -gt 1 ] && usage
+	search_upward "$1" || stat=$?
+else
+	[ $# != 1 ] && usage
+	search_project_dir "$1" || stat=$?
+fi
+exit $stat

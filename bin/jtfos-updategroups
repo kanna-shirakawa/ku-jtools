@@ -1,0 +1,258 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+## jtfos-updategroups - fossil, rebuild groups web components
+##
+## creates or updates web components for each fossil repository
+## group: cgi-bin driver script and index page
+##
+## must be launched on the same computer holding the repos and
+## where apache2 is installed and running
+##
+## see /etc/jtools/conf.d database for details
+##
+## FIXME: descrivere formato definizioni (db)
+##
+. jtfunctions.sh
+
+CMD=`basename $0`
+
+usage()
+{
+	echo "usage: $CMD [group(s)]" >&2
+	exit 1
+}
+
+pline() { printf " %-20s %-20s %-s\n" "$1" "$2" "$3"; }
+
+cleanup()
+{
+	rm -rf $tmpdir
+}
+
+
+check_server()
+{
+	local myself=`uname -n`
+	local myip=
+	local srvname=
+	local srvip=
+
+	srvname=`jtconf jscm.reposerver` || return $?
+	srvip=`host $srvname 2>&1 | sed -n -e 's/.*has address //p'` || return $?
+	myip=`host $myself 2>&1 | sed -n -e 's/.*has address //p'` || return $?
+
+	[ "$srvip" == "" ] && {
+		echo "can't proceed, DNS doesnt return any ip for reposerver '$srvname'" >&2
+		return 1
+	}
+	[ $srvip != $myip ] && {
+		echo "wrong machine!" >&2
+		echo "this command must run only on jscm reposerver '$srvname'" >&2
+		echo "(as stated by DNS, $srvname ip: $srvip, this machine ip: $myip)" >&2
+		return 1
+	}
+	echo -e "search=$srvname, this=$myself, ip=$myip (same, ok)\n" >&2
+	return 0
+}
+
+check_group()
+{
+	local grp="$tag.$1"
+	[ "`jtconf --list $grp`" != "$grp" ] && {
+		pline $grp "UNKNOWN"
+		return 1
+	}
+	return 0
+}
+
+installfile()
+{
+	local from=$1
+	local dest=$2
+	local mode=${3:-660}
+
+	[ -f $dest ] || {
+		cp /dev/null $dest || return $?
+	}
+	cmp $from $dest >/dev/null || {
+		echo "  install $dest ($mode)" >&2
+		cat $from >$dest	|| return $?
+	}
+	# fix perms (always)
+	chmod $mode $dest	|| return $?
+	chgrp $webgroup $dest	|| return $?
+	chown $webuser $dest 2>/dev/null
+	return 0
+}
+
+
+get_config()
+{
+	local file=$1
+	local key=$2
+	echo "select value from config where name = '$key';" | sqlite3 $file
+}
+
+update_group()
+{
+	local grpname="$1"
+	local grp="$tag.$grpname"
+	local webslot=
+	local name=
+	local desc=
+	local tmpdefs="$tmpdir/tmpdefs"
+	local fossildir=
+	local outfile=
+	local projects=
+	local prj=
+	local buf=
+	local template=
+	local cgidir=
+	local docsdir=
+	local dir=
+
+	webslot=`jtconf $grp.webslot 2>/dev/null` || {
+		pline $grp "SKIPPED" "(webslot undefined)"
+		return 0
+	}
+	name=`jtconf $grp.name 2>/dev/null` || {
+		name=$grpname
+	}
+	desc=`jtconf $grp.desc` || return $?
+
+	pline $name "$webslot" "$desc"
+
+	fossildir="$repobase/$grpname"
+	[ -d $fossildir ] || {
+		echo -e "   project repo dir '$fossildir' not found, ignored\n"
+		return 0
+	}
+
+	# fix perms
+	#
+	jtmkpath -v $fossildir $webuser:$webgroup 770
+
+	template=`_jt_search_template fossil-project-entry.html` || {
+		echo -e "   error, tempate 'fossil-project-entry.html' not found" >&2
+		exit $?
+	}
+	projects=`(cd $fossildir ; ls *.fossil 2>/dev/null)`
+	buf=
+
+	local prj_name=
+	local prj_desc=
+
+
+	for prj in $projects
+	do
+		prj_name=`get_config $fossildir/$prj project-name`
+		prj_desc=`get_config $fossildir/$prj project-description | head -1`
+
+		prj_name=${prj_name:-"(`basename $prj .fossil`)"}
+		prj_desc=${prj_desc:-"(no description)"}
+
+		# create tmpdefs for jtconf and jtconf-parse
+		#
+		echo "[tmp]" >>$tmpdefs
+		echo "  grp_name	$name"	>>$tmpdefs
+		echo "  grp_desc	::$grp.desc::"	>>$tmpdefs
+		echo "  grp_webslot	::$grp.webslot::"	>>$tmpdefs
+		echo "  grp_webfooter	::$grp.webfooter::"	>>$tmpdefs
+		echo "  prj_file	`basename $prj .fossil`" >>$tmpdefs
+		echo "  prj_name	$prj_name"		>>$tmpdefs
+		echo "  prj_desc	$prj_desc"		>>$tmpdefs
+
+		buf="$buf `jtconf-parse -i $tmpdefs --simple $template`"
+
+		pline "  $prj" "$prj_name" "$prj_desc"
+	done
+	echo "  prj_list	$buf" >>$tmpdefs
+
+	template=`_jt_search_template fossil-projects.html` || {
+		echo "   error, tempate 'fossil-projects.html' not found" >&2
+		exit 1
+	}
+	jtconf-parse -i $tmpdefs --simple $template >$tmpdir/outfile
+
+	buf=`jtconf $grp.webdir`		|| exit $?
+	webcgi=$buf/`jtconf $grp.webcgi`	|| exit $?
+	webdocs=$buf/`jtconf $grp.webdocs`	|| exit $?
+
+	outfile="$webdocs/$webslot.html"
+	installfile $tmpdir/outfile $outfile || exit $?
+
+
+
+	echo "#!/usr/bin/fossil"	>$tmpdir/outfile
+	echo "directory: $fossildir"	>>$tmpdir/outfile
+	echo "notfound: /$webslot.html"	>>$tmpdir/outfile
+	outfile="$webcgi/$webslot"
+	installfile $tmpdir/outfile $outfile 770 || exit $?
+
+	echo >&2
+	return 0
+}
+
+
+
+fix_last_files()
+{
+	local outfile=
+	local template=
+
+	outfile="$webdocs/fossil.css"
+	template=`_jt_search_template fossil.css` || {
+		echo "   error, tempate 'fossil.css' not found" >&2
+		exit 1
+	}
+	[ -f $outfile ] || cp /dev/null $outfile
+	installfile $template $outfile || exit $?
+}
+
+
+
+# (MAIN)
+
+exit_status=0
+groups=
+tag="jscm-group"
+tmpdir=`mktemp -d /tmp/$CMD-XXXXXXXX`
+
+trap "cleanup; exit 255" 1 2 3
+
+while [ $# != 0 ]
+do
+  case $1 in
+   -*|"") usage ;;
+   *) groups="$groups $1" ;;
+  esac
+  shift
+done
+
+groups=${groups:-`jtconf --list $tag. | sed -e "s/$tag\.//"`}
+
+# preload jscm defs
+#
+repobase=`jtconf jscm.repobase`		|| exit $?
+tool=`jtconf jscm.tool`			|| exit $?
+webuser=`jtconf jscm.$tool.user`	|| exit $?
+webgroup=`jtconf jscm.$tool.group`	|| exit $?
+
+
+echo -e "\n$CMD - update jscm groups\n"
+
+echo -n " checking server ... "
+check_server || exit $?
+
+for group in $groups
+do
+	check_group $group && update_group $group && exit_status=1
+done
+
+fix_last_files
+
+cleanup
+exit $exit_status

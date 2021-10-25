@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+## jtfos-update-n - fossil, launch "update -n" with no spurious files
+##
+## wrapper to "update" function of "fossil" command, when
+## launched with -n parm (nothing to do, only show) has the
+## problem that will leave spurious files on filesystem:
+## if a conflict was detected on <file>, you will have
+## <file>-baseline, <file>-merge and <file>-original left
+## around
+##
+CMD=`basename $0`
+
+usage()
+{
+	echo "usage: $CMD  (calls 'fossil update -n')" >&2
+	exit 1
+}
+
+cleanup()
+{
+	rm -f $tmpfile
+}
+
+# (MAIN)
+
+[ "$PRJ" == "" ] && {
+	echo "you must be connected to a project (\$PRJ is unset)" >&2
+	exit 1
+}
+
+pwd | grep -q "^$PRJ" || {
+	echo "not outside a project tree (PRJ=$PRJ)" >&2
+	echo "you are in: `pwd`" >&2
+	exit 1
+}
+
+tmpfile=`mktemp /tmp/$CMD-XXXXXX`
+
+trap "cleanup; exit 255" 1 2 3
+
+
+# collect filenames
+#
+cd $PRJ
+find | sort >$tmpfile
+
+# calls fossil update
+#
+fossil update -n
+
+# search spurious files
+#
+find | sort | while read filename
+do
+	case $filename in
+	  *-baseline|*-merge|*-original) ;;		# ok
+	  *-baseline-*|*-merge-*|*-original-*) ;;	# ok
+	  *) continue ;;
+	esac
+	grep -q "^$filename$" $tmpfile	&& continue	# was already here
+
+	# spurious, delete
+	rm -f "$filename"
+done
+
+cleanup
+exit 0

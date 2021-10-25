@@ -1,0 +1,22 @@
+Source: ku-jtools
+Section: klabs
+Priority: extra
+Maintainer: Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+Build-Depends: debhelper (>= 7)
+Standards-Version: 3.8.0
+Homepage: http://www.kubiclabs.com/
+
+Package: ku-jtools
+Architecture: all
+Depends: ku-base (>= 1.2-ku19-9)
+Replaces: kl-jtools
+Conflicts: kl-jtools
+Description: KUBiC Labs Projects Management Tools
+ .
+ A small set of tools for projects development and management:
+ .
+ - project directory structure maintenance
+ - shell environment auto setup based on concept of 'current project'
+ - multi-distro build and repo maintenance utils/frontends for
+   packaging (supported: Devuan/Debian/Ubuntu, Fedora support is now
+   deprecated)

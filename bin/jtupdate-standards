@@ -1,0 +1,75 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=`basename $0`
+files="Makefile install-functions.sh install.sh"
+libdir="/usr/lib/jtools/install"
+prevdir="$libdir/prev"
+
+realfile()
+{
+	[ -f $1 ] || {
+		[ -f ../$1 ] && {
+			echo ../$1
+			return 0
+		}
+	}
+	echo $1
+	return 0
+}
+
+[ -d ku ] && cd ku
+
+
+found=false
+for file in $files
+do
+	fpath=`realfile $file`
+	[ -f $fpath ] && {
+		found=true
+		break
+	}
+	echo " missing $file"
+done
+$found || {
+	echo "no required files here, right dir?" >&2
+	exit 1
+}
+
+for file in $files
+do
+
+	fpath=`realfile $file`
+
+	[ -f $fpath ] || continue
+
+	# check if up to date
+	#
+	cmp $fpath $libdir/$file >/dev/null && continue
+
+
+	# check for replace/update
+	#
+	foundprev=
+
+	for prev in `ls $prevdir/$file.* 2>/dev/null`
+	do
+		cmp $fpath $prev >/dev/null && {
+			foundprev=`basename $prev`
+			break
+		}
+	done
+
+	if [ -z "$foundprev" ]
+	then
+		echo " DIFFER  '$fpath', standard installed as $fpath.new"
+		cp -a $libdir/$file $fpath.new || exit $?
+	else
+		echo " replace '$fpath' (same of $foundprev)"
+		cp -a $libdir/$file $fpath || exit $?
+	fi
+done
+
+exit 0

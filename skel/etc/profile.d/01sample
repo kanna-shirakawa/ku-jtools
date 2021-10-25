@@ -1,0 +1,8 @@
+# $PRJ/etc/profile.d/01sample - sample profile snippet
+#
+# all files in this directory will be sourced into your bashrc
+# at project connection
+#
+
+
+# do not exit, this file will be included (sourced)

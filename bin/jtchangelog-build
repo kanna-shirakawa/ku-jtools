@@ -1,0 +1,136 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=`basename $0`
+
+cleanup()
+{
+	rm -f $tmpin
+}
+
+
+# (MAIN)
+
+# move to pkg root
+#
+while [ `pwd` != "/" ]
+do
+	[ -d ku ] && break
+	cd ..
+done
+[ -d ku ] || {
+	echo "error, can't find 'ku' directory (and package root)" >&2
+	exit 1
+}
+
+pkgname=`pwd | sed -e 's#.*/##' -e 's/-[0-9].*//'`
+ifile="ku/history"
+outfile="$ifile.new"
+out_debian="debian.in/changelog"
+out_fedora="fedora.in/$pkgname.spec"
+
+today=`date '+%Y-%m-%d %H:%M:%S'`
+dtoday=`date -R --date "$today"`			# for debian changelog
+rtoday=`date '+%a %b %d %Y' --date "$today"`	# for rpm changelog
+maintainer=`grep "^:maintainer" "ku/install" | sed -e 's/^:maintainer[ ,	]*//'`
+version=`grep "^:VERSION" "ku/install" | sed -e 's/^:VERSION[ ,	]*//'`
+release=`grep "^:RELEASE" "ku/install" | sed -e 's/^:RELEASE[ ,	]*//'`
+debrelease=`echo $release | tr '.' '-'`
+
+
+
+echo "
+  $CMD
+
+  package:     $pkgname $version $release
+  root:        `pwd`
+  out:         $outfile $out_debian $out_fedora
+  maintainer:  $maintainer
+"
+
+[ -d debian.in ] || out_debian=
+[ -d fedora.in ] || out_fedora=
+rm -f $outfile $out_debian $out_fedora
+
+# history
+#
+echo "$today $version $release $maintainer" >>$outfile
+echo "" >>$outfile
+
+
+# debian changelog (deb)
+#
+[ -z $out_debian ] || {
+	echo "$pkgname ($version-$debrelease) unstable; urgency=low" >>$out_debian
+	echo "" >>$out_debian
+	closure_debian="\n -- $maintainer  $dtoday\n"
+}
+
+
+# fedora changelog (rpm), appended to specfile
+#
+[ -z $out_fedora ] || {
+	[ -f $out_fedora.in ] || {
+		echo "error, missing file '$out_fedora.in'" >&2
+		exit 1
+	}
+	cp $out_fedora.in $out_fedora || exit $?
+	echo "* $rtoday $maintainer" >>$out_fedora
+}
+
+d='[0-9][0-9]'
+
+# history:
+#
+# (DATE) __TOOLKIT_VERSION__-__TOOLKIT_RELEASE__ __maintainer__
+
+tmpin=`mktemp /tmp/$CMD-XXXXXXX` || exit $?
+
+trap "cleanup; exit 255" 1 2 3
+
+sed -e 's/^/x/' $ifile >$tmpin
+
+exec 9<&0 <$tmpin
+while read line
+do
+	line=`echo "$line" | sed -e 's/^x//'`
+	echo "$line" >>$outfile
+
+	if echo "$line" | grep -q "^$d$d-$d-$d $d:$d:$d "
+	then
+		date=`echo "$line" | cut -d' ' -f1`
+		time=`echo "$line" | cut -d' ' -f2`
+		ver=`echo "$line" | cut -d' ' -f3`
+		rel=`echo "$line" | cut -d' ' -f4`
+		maint=`echo "$line" | cut -d' ' -f5-`
+
+		[ -z $out_debian ] || {
+			[ -z "$closure_debian" ] || echo -e "$closure_debian"	>>$out_debian
+			debrel=`echo $rel | tr '.' '-'`
+			ddate=`date -R --date "$date $time"`
+			echo "$pkgname ($ver-$debrel) unstable; urgency=low" >>$out_debian
+			closure_debian=" -- $maint  $ddate\n"
+		}
+		[ -z $out_fedora ] || {
+			[ -z "$closure_fedora" ] || echo -e ""	>>$out_fedora
+			rdate=`date '+%a %b %d %Y' --date "$date $time"`
+			echo "* $rdate $maint" >>$out_fedora
+			closure_fedora="yes"
+		}
+	else
+		[ -z $out_debian ] || echo "$line" >>$out_debian
+		[ -z $out_fedora ] || {
+			[ -z "$line" ] || echo "$line" | \
+				sed -e 's/^  //' -e 's/^\* */- /' >>$out_fedora
+		}
+	fi
+done
+exec 0<&9 9<&-
+
+[ -z "$closure_debian" ] || echo -e "$closure_debian"	>>$out_debian
+[ -z "$closure_fedora" ] || echo -e ""	>>$out_fedora
+
+cleanup
+exit 0

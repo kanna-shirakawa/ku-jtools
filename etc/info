@@ -1,0 +1,11 @@
+Il progetto ::env.PRJNAME:: ha lo scopo di agevolare la gestione
+dei progetti software su macchine Linux.
+
+Contiene tools per gestirne la descrizione formale, per
+produrre automaticamente documentazione in vari modi e
+formati (per il momento solo wiki moin), e fornisce un
+potente strumento di definizione di variabili di ambiente
+modulare e con caratteristiche di ereditarieta'.
+
+I tools sono utili tutto il ciclo di vita del progetto:
+definizione, implementazione, deployment, manutenzione.

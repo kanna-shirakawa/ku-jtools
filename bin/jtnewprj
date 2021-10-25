@@ -1,0 +1,243 @@
+#!/bin/bash
+#
+# maintainer: KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>
+# for copyright see /usr/share/doc/jtools/copyright
+#
+## tools,project create a new project
+## 
+## == synopsis ==
+## === usage ===
+##  ::filename:: [options] name [desc]
+## 
+## === options ===
+##
+##  * --url URL
+##  * name: single word or a full path, can't contains spaces,
+##  project will be created in the $JTCREATEPATH directory, use full
+##  path to override
+## 
+## == desc ==
+## Serve per creare uno slot di progetto. Lo slot viene creato come subdir
+## della directory definita in $JTCREATEPATH, oppure nel path specificato
+## se questo e` completo (full).
+## 
+## Lo slot viene popolato con le principali directories di lavoro, e alcuni files
+## di gestione vengono inizializzati, vedi [[jtfilesystem]]
+## 
+## <!> in questa versione non esistono files di supporto, ma sono previsti
+## 
+CMD=$(basename $0)
+CMDVER="1.6"
+CMDSTR="$CMD v.$CMDVER (2018/01)"
+
+# includes standard definitions and functions
+#
+. jtfunctions.sh
+
+set -u
+set -e
+
+usage()
+{
+	echo "
+=== $CMDSTR - create new (git) project following jtools standards ===
+
+usage: $CMD [options] name [desc]
+
+options:
+  --url	URL	uses this url instead of $JTSCMURL:<name>
+  		(eg: git@gitolite-server-name:prjname)
+
+
+* name: single word or a full path (if you don't provide a full path, the
+  project will be created in '$JTCREATEPATH')
+
+ENV:
+  JTSCMURL: $JTSCMURL
+  JTUSER:   $JTUSER	(ignored at the moment)
+  JTGROUP   $JTGROUP	(ignored at the moment)
+" >&2
+
+	[ $# != 0 ] && echo -e "error: $@\n" >&2
+
+	exit 1
+}
+
+print_help()
+{
+	:
+}
+
+cleanup()
+{
+	:
+}
+
+
+sanity_checks()
+{
+	# sanity checks
+	#
+	[ -d "$prjpath" ] || {
+		echo "error: parent directory '$prjpath' not exists" >&2
+		return 1
+	}
+	[ -d "$prjpath/$prj" ] && {
+		echo "error: directory '$prjpath/$prj' already exists" >&2
+		return 1
+	}
+	case $url in
+  	  git@*) ;;	# OK
+	  "") ;;	# OK
+	  *)
+	  	echo "error: unknown url type '$url'" >&2
+		return 1
+	esac
+	return 0
+}
+
+
+# create new project tree based on URL type
+#
+create_prjdir()
+{
+	echo -e "\ncreating new project in '$prjpath/$prj'\n"
+
+	case $url in
+  	  git@*)
+		echo -e "GIT: cloning from $url ...\n"
+  		git clone $url $prj || return $?
+		[ -f $prj/.prj_mtimes ] && (cd $prj; export PRJ=$(pwd); jtscm-restore-mtimes -a)
+		;;
+	  "")
+  		mkdir $prj || return $?
+		;;
+	esac
+	return 0
+}
+
+
+# populate project dir
+#
+setup_prjdir()
+{
+	echo -e "\ncreating project directory structure\n"
+
+	for dir in bin etc docs
+	do
+		[ -d $dir ] || {
+			echo "  creating '$dir'"
+			mkdir "$dir"
+			cp /dev/null $dir/.placeholder
+		}
+	done
+
+	[ -f etc/desc ] || {
+		echo "  setting etc/desc: $prjdesc"
+		echo "$prjdesc" >etc/desc
+	}
+
+	# FIXME
+	#chown -R $JTUSER.$JTGROUP .
+	#chmod -R g+w .
+
+	return 0
+}
+
+
+
+setup_prjdir_git()
+{
+	echo -e "\nsetup project directory, type: GIT\n"
+
+	git log -1 >/dev/null 2>/dev/null || {
+		# empty repo?
+		[ $? == 128 ] && {
+			echo -e "\n  WARN: empty project, creating initial release\n"
+
+			jtgit-ignore-update -f
+			git add .gitignore
+
+			(export PRJ=`pwd` ; jtscm-save-mtimes)
+			git add .prj_mtimes
+
+			git add .
+			git commit -m "initial release (empty project)"
+			git push origin master
+		}
+	}
+
+	return 0
+}
+
+
+
+# (MAIN)
+
+trap 'echo -e "\n*INTR*\n"; cleanup; exit 255' 1 2 3
+trap 'echo -e "\nunexpected error $? at $LINENO\n"' ERR
+trap 'cleanup' EXIT
+
+prj=
+prjdesc=
+prjpath=
+url=
+arg_url="NONE"
+
+while [ $# != 0 ]
+do
+  case $1 in
+    --url)
+    	shift
+	[ $# == 0 ] && usage '--url needs a parm'
+	arg_url=$1
+	;;
+    --)		break ;;
+    -h|--help)	print_help ;;
+    -*|"")	usage "unknown option: '$1'" ;;
+    *)
+    	if [ "X$prj" == "X" ]
+	then
+		prj=$1
+	else
+		if [ "X$prjdesc" == "X" ]
+		then
+			prjdesc=$1
+		else
+			usage "too many parms"
+		fi
+	fi
+	;;
+  esac
+  shift
+done
+
+case "$prj" in 
+	"")	usage ;;
+	*" "*)	usage "prject name can't contain spaces" ;;
+	/*)	;;
+	*)	prj="$JTCREATEPATH/$prj"; ;;
+esac
+prjpath=`dirname "$prj"`
+prj=`basename $prj`
+prjdesc=${prjdesc:-"MISSING DESC"}
+
+case $arg_url in
+  NONE)	url="$JTSCMURL:$prj" ;;
+  "")	url= ;;
+  *)	url="$arg_url" ;;
+esac
+
+sanity_checks || exit $?
+
+cd $prjpath
+create_prjdir || exit $?
+
+cd $prj
+setup_prjdir || exit $?
+
+case $url in
+  git@*)	setup_prjdir_git || exit $? ;;
+esac
+
+exit 0

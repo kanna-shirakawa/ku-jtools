@@ -1,0 +1,146 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="2.0"
+CMDSTR="$CMD v$CMD (2019/03)"
+
+KEYNAME="packager"
+KEYFILE="$PRJ/gpg/KEY.gpg"
+
+set -e -u
+
+target="$PRJ/target"
+
+umask 0002
+
+
+update_commons()
+{
+	local dist=$1
+	local here=`pwd`
+	local distname=`basename $dist`
+	local file=
+
+	for file in `(cd $PRJ/common ; ls *.deb 2>/dev/null)`
+	do
+		[ -L $dist/$file ] && rm -f $dist/$file
+		[ -f $dist/$file ] && continue
+		echo "  copying (common)   $file"
+		cp -a $PRJ/common/$file $dist/.
+	done
+
+	[ -d $PRJ/external/$distname ] && {
+		for file in `(cd $PRJ/external/$distname ; ls *.deb 2>/dev/null)`
+		do
+			[ -L $dist/$file ] && rm -f $dist/$file
+			[ -f $dist/$file ] && continue
+			echo "  copying (external) $distname/$file"
+			cp -a $PRJ/external/$distname/$file $dist/.
+		done
+	}
+	return 0
+}
+
+update_repo()
+{
+	local dist=$1
+	local here=$(pwd)
+	local gpg_key="$PRJ/gpg/KEY.gpg"
+
+	echo " updating $dist ..."
+	update_commons $dist
+	cd $dist
+	echo -n "  generating Packages file ... "
+	apt-ftparchive packages . >Packages
+	gzip <Packages >Packages.gz
+	echo "ok"
+	echo -n "  generating Release file ... "
+	apt-ftparchive release . >Release
+	echo "ok"
+
+	if [ -f $gpg_key ]
+	then
+		echo -n "  generating Release.gpg file ... "
+		rm -f Release.gpg
+		gpg --default-key ${KEYNAME} -abs -o Release.gpg Release
+		echo "ok"
+
+		echo -n "  generating InRelease file ... "
+		rm -f InRelease
+		gpg --default-key ${KEYNAME} --clearsign -o InRelease Release
+		echo "ok"
+
+		cp -a $KEYFILE .
+	else
+		echo "  warning: gpg key file $gpg_key not found"
+		echo "           will not generate Release.gpg and InRelease files"
+	fi
+	cd $here
+}
+
+
+# (MAIN)
+
+file="$PRJ/etc/packager_name"
+[ -f $file ] && {
+	echo "  setting $file"
+	KEYNAME=$(cat $file)
+}
+
+file="$PRJ/etc/gpg_key_filename"
+[ -f $file ] && {
+	echo "  setting $file"
+	KEYFILE=$(cat $file)
+}
+
+echo
+echo "  gpg signature packager name: $KEYNAME"
+echo "  gpg keyfile: $KEYFILE"
+echo
+ 
+[ -d $target ] || mkdir $target
+[ -d $target ] || exit 1
+
+cd $target
+stat=0
+
+# just to cache credentials for future invocations
+#
+sudo ls >/dev/null
+
+if [ X"$1" != "X" ]
+then
+	for dist
+	do
+		path=$dist
+		[ -d $path ] || path="dists/$dist"
+		[ -d $path ] || {
+			echo "error: directory '$dist' not exists" >&2
+			echo "(here is: `pwd`)" >&2
+			stat=1
+			continue
+		}
+		update_repo $path
+	done
+else
+	for dist in `ls -d dists/*`
+	do
+		[ -d $dist ] && {
+			update_repo $dist
+		}
+	done
+fi
+[ $stat != 0 ] && exit $stat
+
+# fixes
+echo -en " fixing perms ... "
+sudo chgrp ftp -R .
+sudo chmod g+rw -R .
+sudo chmod a+r -R .
+sudo find . -type d -exec chmod g+rwxs {} \;
+echo "ok"
+
+exit $stat

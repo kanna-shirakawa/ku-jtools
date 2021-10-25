@@ -1,0 +1,85 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.4"
+CMDSTR="$CMD v$CMDVER (2017/09)"
+
+usage()
+{
+	echo -e "
+this is $CMDSTR - list missing ports for distr/arch
+
+usage: $CMD [distro [arch]]
+" >&2
+	exit 1
+}
+
+cleanup()
+{
+	[ "$tmpdir" != "" -a -d "$tmpdir" ] && rm -rf $tmpdir
+}
+
+# (MAIN)
+
+distro=
+osarch=
+here=$(pwd)
+
+case $# in
+  0)	;;
+  1)	distro=$1; shift ;;
+  2)	distro=$1; osarch=$2; shift 2 ;;
+  *)	usage ;;
+esac
+
+[ "$distro" = "" ] && {
+	eval $(ku-distroenv)
+	distro=$DISTRIB_CODENAME
+}
+[ "$osarch" = "" ] && {
+	case $(uname -m) in
+    	  x86_64)	osarch=amd64 ;;
+    	  *)		osarch=i386 ;;
+	esac
+}
+
+target=$PRJ/pkgs/$distro
+tmpdir=$(mktemp -d /tmp/$CMD-XXXXXX)
+
+trap "echo '*INTR*'; cleanup; exit 127" 1 2 3
+trap "cleanup" EXIT
+
+jtdeb-cache update 2>$tmpdir/jtdeb-cache.err || {
+	stat=$?
+	cat $tmpdir/jtdeb-cache.err
+	exit $stat
+}
+
+outfile=$tmpdir/pkglist
+srcfile=$tmpdir/srclist
+
+for arch in $osarch # any all
+do
+	for pkgfile in $(jtdeb-cache --arch $arch --distro $distro pkgfile '.*')
+	do
+		[ -f $target/$pkgfile ] || {
+			##echo ">>> missing $target/$pkgfile"
+			source=$(jtdeb-cache --deb pkgname $pkgfile)
+			echo $source >>$srcfile
+			echo $pkgfile >>$outfile
+		}
+	done
+done
+[ -s $outfile ] || exit 0
+
+echo -e "\nMISSING PKGS FOR DIST: $distro $osarch\n"
+sort -u $outfile
+
+echo -e "\nSOURCES PACKAGES THAT NEEDS TO BE RECOMPILED ($distro $osarch):\n"
+sort -u $srcfile
+
+echo
+exit 0

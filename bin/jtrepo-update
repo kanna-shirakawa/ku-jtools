@@ -1,0 +1,127 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=`basename $0`
+
+[ -f $PRJ/etc/target ] || { echo "$PRJ/etc/target file missing" >&2; exit 1; }
+
+repodir="$PRJ/target"
+remotedir=`cat $PRJ/etc/target`
+
+
+usage()
+{
+	echo "usage: $0 [distname(s) | --all]" >&2
+	exit 1
+}
+
+eval $(ku-distroenv)
+
+
+# (MAIN)
+
+case $1 in
+  -a|--all)	dists=`cd $PRJ/target/dists && ls` ;;
+  -*)		usage ;;
+  "")		dists=$DISTRIB_CODENAME ;;
+  *)		dists=$* ;;
+esac
+
+
+# just to cache credentials for future invocations
+#
+sudo ls >/dev/null
+
+for dist in $dists
+do
+	distdir=$repodir/dists/$dist
+	targetdir=$distdir
+	pkgsdir=$PRJ/pkgs/$dist
+
+	#arch=`uname -m`
+	#case "$arch" in
+	  #i*86)	arch=i386 ;;
+	#esac
+	#targetdir=$distdir/main/binary-$arch
+
+	# sanity checks
+	#
+	[ -d $repodir ] || {
+		echo "error: repo dir '$repodir' not exists" >&2
+		exit 1
+	}
+	[ -d $distdir ] || {
+		echo "error: dist dir '$distdir' not exists" >&2
+		exit 1
+	}
+	[ -d $pkgsdir ] || {
+		echo "error: packages dir '$pkgsdir' not exists" >&2
+		exit 1
+	}
+
+	# preliminary setup
+	#
+	cd $distdir
+	[ -d $tartgetdir ] || {
+		echo "  creating dir $targetdir"
+		mkdir -p $targetdir || exit $?
+	}
+
+	echo
+	echo "  source dir: $pkgsdir"
+	echo "  dest dir:   $targetdir"
+	echo
+
+	cd $pkgsdir
+
+	something_changed=false
+
+	for pkg in *.deb
+	do
+		printf " %-55s   ... " $pkg
+		pkgname=`echo $pkg | sed -e 's/_.*//'`
+		must_install=false
+		if [ -f $targetdir/$pkg ]
+		then
+			cmp $pkg $targetdir/$pkg >/dev/null || {
+				echo -n "diff, "
+				must_install=true
+			}
+		else
+			echo -n "miss, "
+			must_install=true
+		fi
+		$must_install && {
+			echo -n "install ... "
+			cp -a $pkg $targetdir/. || exit $?
+			something_changed=true
+		}
+
+		to_purge=
+		pkgfullname=`echo $pkg | sed -e 's/_[a-z0-9][a-z0-9_]*\.deb//'`
+
+		for actual in `(cd $targetdir ; ls ${pkgname}_* 2>/dev/null)`
+		do
+			actname=`echo $actual | sed -e 's/_[a-z0-9][a-z0-9_]*\.deb//'`
+			[ $actname != $pkgfullname ] && to_purge="$to_purge $actual"
+		done
+		[ "$to_purge" != "" ] && {
+			echo -n "purge " $to_purge " ... "
+			(cd $targetdir ; rm -f $to_purge)
+		}
+		echo "ok"
+	done
+	echo
+
+	jtrepo-rebuild dists/$dist || exit $?
+done
+
+
+# update remote dir
+#
+echo -e "  updating remote repo $remotedir\n"
+sudo mirror -f $repodir $remotedir || exit $?
+
+exit 0

@@ -1,0 +1,197 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=`basename $0`
+
+set -u
+set -e
+
+# fancy output utils
+. /lib/ku-base/echo.sh
+
+# ENV
+#
+export VERBOSE=${VERBOSE:-"true"}
+export DEBUG=${DEBUG:-"false"}
+export TOOLKIT=${TOOLKIT:-$CMD}
+export PRJNAME=${PRJNAME:-""}
+export LN=${LN:-"ln -s"}
+export MV=${MV:-"mv -f"}
+export RM=${RM:-"rm -f"}
+
+
+usage()
+{
+	echo "
+usage:	$CMD [options] original_file link_destination
+
+OPTIONS:
+  -v|--verbose	be verbose (default: $VERBOSE)
+  -q|--quiet	be quiet
+  -D|--debug	set debug
+  -n|--dry-run	don't do anything, only show actions
+
+  --sudo	use sudo
+
+  --inform	if any change is made and no errors occurred, the
+  		command exists with errcode 254 instead of 0, and
+		you make your decision about subsequent actions
+" >&2
+	exit 127
+}
+
+
+
+help()
+{
+	($CMD --usage) || :
+
+	echo "
+RULES
+  * if destination has trailing slash '/' is considered a directory
+    name, not a file, and the file will be copied in this directory
+    using the original filename (basename, not path)
+
+  * the destination directory path must be present
+
+
+EXIT STATUS
+  0	the file(s) was successufull installed
+  127	usage error
+  254	the file(s) was not installed or modified (if --inform used)
+  *	any error
+
+" >&2
+	return 0
+}
+
+error()
+{
+	echo -e "\n$CMD error: $*\n"
+}
+
+
+cleanup()
+{
+	: #rm -f $TmpInstall $TmpInput
+}
+
+## === updatelink target src ===
+##
+## aggiorna il link simbolico da ''src'' a ''target''
+##
+## ''target'' puo` essere indifferentemente un file o una directory
+##
+## se ''src'' esiste e ''target'' esiste, src viene rinominato
+## in ''src.old'' (l'eventuale ''src.old'' non deve esistere)
+## prima di eseguire il link
+##
+updatelink()
+{
+	local src="$1"
+	local target="$2"
+	local actual=
+	local action="create"
+
+	[ -e "$src" ] || {
+		echo "source '$src' doesn't exists" >&2
+		return 1
+	}
+
+	[ -e "$target" ] && {
+		if [ -L "$target" ]
+		then
+			# already a symlink, check if is correct
+			#
+			actual=`ls -ld "$target" | sed -e 's/.*-> //'`
+			if [ "$actual" != "$src" ]
+			then
+				action="modify"
+				$RM "$target"
+			else
+				return 0	# already done
+			fi
+		else
+			echo "  warning: renaming actual '$target' to '$target.old'" >&2
+			[ -e $target.old ] && {
+				echo "  error: '$target.old' exists, can't rename" >&2
+				return 1
+			}
+			$MV "$target" "$target.old" || return $?
+		fi
+	}
+
+	echo "  $action link $target -> $src" >&2
+	$LN "$src" "$target" || return $?
+	return 0
+}
+
+
+
+# (MAIN)
+
+Dflag=
+DummyTag=
+F_Exec=true
+F_OnlyPerms=false
+F_Sudo=false
+F_Parse=false
+F_Inform=false
+F_MakeInput=false
+JtIncludes=
+inputfile=
+_DefaultOwner=
+_DefaultPerms=
+stat=
+
+while [ $# != 0 ]
+do
+  case $1 in
+    -v|--verbose)	VERBOSE=true ;;
+    -q|--quiet)		VERBOSE=false ;;
+    -D|--debug)		DEBUG=true ; Dflag="--debug"
+    			[ $# != 1 ] && {
+				echo "$2" | grep -q '^[0-9]$' && {
+					Dflag="--debug $2"
+					shift
+				}
+			}
+			;;
+    -n|--dry-run)	F_Exec=false ; DummyTag="(nop)" ;;
+    --usage)		usage ;;
+    --help)		help ; exit 0 ;;
+    --sudo)		F_Sudo=true ;;
+    --inform)		F_Inform=true ;;
+    --)			break ;;
+    -*|"")		usage "unkown option: $1" ;;
+    *)			break ;;
+  esac
+  shift
+done
+
+$F_Sudo && {
+	LN="sudo $LN"
+	MV="sudo $MV"
+	RM="sudo $RM"
+}
+$F_Exec || {
+	LN="echo $DummyTag $LN"
+	MV="echo $DummyTag $MV"
+	RM="echo $DummyTag $RM"
+}
+
+
+[ $# != 2 ] && usage "wrong number of parms ($*)"
+
+updatelink "$1" "$2"
+stat=$?
+
+$F_Inform && {
+	[ $stat == 0 ] && {
+		$ChangesMade && stat=254
+	}
+}
+
+exit $?

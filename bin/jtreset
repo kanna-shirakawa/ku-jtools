@@ -1,0 +1,37 @@
+#!/usr/bin/perl -w
+#
+# __copy1__
+# __copy2__
+#
+# executes a command line after resetting actual projects env vars
+# it's written in perl to avoid any shell arguments expansion
+#
+$CMD	= "jtreset";
+$CMDVER	= "1.2";
+$CMDSTR	= "$CMD v.$CMDVER (2019/06)";
+
+usage()	if (!@ARGV);
+
+# save/export current prj name and path
+$ENV{PRJ_OLD}		= $ENV{PRJ};
+$ENV{PRJ_OLDNAME}	= $ENV{PRJNAME};
+
+# remove all prj vars from env
+foreach $_ (qw/PRJ PRJNAME PRJDESC PRJVER PRJ_BZRVER PRJ_BZRDATE PRJBATCHMODE/) {
+	delete $ENV{$_};
+}
+
+# run commandline
+$result = system( @ARGV );
+exit( $result % 255 );
+
+
+
+sub usage
+{
+	die "
+this is $CMDSTR - run commands with a clean project environment
+
+usage: $CMD command_line
+";
+}

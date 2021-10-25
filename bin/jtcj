@@ -1,0 +1,399 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.5"
+CMDSTR="$CMD v.$CMDVER (2021-10-23)"
+
+set -e -u
+
+## tools,project apre una shell di lavoro su un progetto
+##
+## == usage ==
+##  ::filename:: [options] prjname [commandline]
+## 
+## == options ==
+##
+##  . '''-v''' attiva verbose, descrive alcuni passaggi
+##  . '''-D''' attiva debug
+##  . '''--no-cd''' non esegue cd nella main dir di progetto
+##  . '''--cd dir''' change directory
+##
+## == description ==
+##
+## Questo comando, anche abbreviato come '''cj''', apre una shell di
+## lavoro sul progetto specificato.
+##
+## Controlla l'esistenza del progetto passato come ''prjname'', e se
+## valido imposta l'environment in modo opportuno e lancia il comando
+## specificato come ''commandline'', oppure una shell interattiva se
+## questo non e` presente.
+##
+## Il progetto viene cercato nelle directories specificate dalla
+## variabile di ambiente ::wiki.lnk_this_project:: $JTPATH, che contiene
+## separati dal carattere ":", un elenco di directories. Se come
+## ''prjname'' viene passato un path completo, allora il path di
+## ricerca sara` ignorato, e il progetto validato sul path indicato.
+##
+## Il comando abortisce se si e` gia` in un ambiente di progetto
+## (il controllo viene effettuato sulla presenza della variabile
+## ''$PRJ''), questo per evitare pericolose sovrapposizioni di
+## ambiente.
+##
+## == environment ==
+##
+## Queste variabili sono disponibili dopo il profiling:
+##
+##  . '''PRJ''' path completo del progetto
+##  . '''PRJNAME''' nome del progetto (normalizzazione di ''prjname'',
+##  di norma uguale al nome della directory base del progetto, ovvero
+##  di "basename $PRJ")
+##  . '''PRJDESC''' descrizione breve del progetto, una riga,
+##  corrisponde al contenuto del file ''$PRJ/etc/desc''
+##  . '''PRJVER''' versione del progetto, contenuto del
+##  file ''$PRJ/etc/version''
+##
+## Inoltre la varibile ''$PATH'' viene aggiornata, al path di ricerca
+## dei comandi viene aggiunta la ''$PRJ/bin''.
+##
+## == dettagli ==
+##
+## Questi sono i passaggi specifici eseguiti da ::filename:::
+##
+##  1. ricerca e controllo esistenza directory di progetto
+##  nella homedir dell'utente
+##
+##  1. impostazione dell'environment standard per progetto
+##
+##  1. esecuzione, tramite inclusione, degli scripts presenti nella
+##  directory $PRJ/etc/profile.d; questi script devono essere bash
+##  scripts eseguibili, i comuni suffissi di backup o simili (~, .bak,
+##  .rpm*, .offline) vengono considerati e nel caso i relativi files,
+##  saltati
+##
+##  1. impostazione prompt per eventuale shell interattiva, il prompt
+##  contiene, racchiuso tra le parentesi quadre "[" e "]", nome del progetto,
+##  utente e host, directory di lavoro (cwd)
+##
+##  1. viene eseguita la ricerca su questi bash script file:
+##   * $PRJ/etc/profile.$LOGNAME
+##   * $HOME/etc/profile.$PRJNAME
+##  il primo trovato viene incluso e la ricerca interrotta; questi
+##  files possono essere usati dall'utente per impostare in modo
+##  particolare l'environment o eseguire operazioni fuori standard,
+##  come si vede questi files di profilo sono personali e complementari,
+##  uno all'interno del progetto (e legato al nome utente), l'altro
+##  viceversa nella home dell'utente (e legato al nome di progetto):
+##  si consideri che il progetto puo` essere trasportato su un altro
+##  host (copiando integralmente il filesystem puntato da $PRJ), oppure
+##  che un utente puo` lavorare sul progetto da un altra macchina
+##  (ad esempio, montando in NFS la directory progetti dal server);
+##  nel primo caso il file sara` sempre presente, dovunque risieda
+##  il progetto, nel secondo il file sara` presente solo in base
+##  all'host di connessione dell'utente, ovvero dove risiede la sua
+##  home, questo permette un approccio abbastanza flessibile
+##
+##  1. inclusione, se esiste, del file $HOME/.pbashrc (bashrc custom personale): questo file e`
+##  presente per ragioni storiche, e` personale dell'utente, e non e` legato a nessun progetto
+##  particolare,  quindi ha un uso limitato, ed e` deprecato in favore di uno dei due files
+##  citati nel p.to precendente
+##
+## Per assicurare che l'ambiente subisca meno interferenze possibili
+## da parte dell'attivazione di una nuova shell, la sequenza di
+## operazioni descritte viene eseguita come profile: si crea un
+## file temporaneo univoco nella homedir dell'utente, e questo
+## file viene passato a ''bash'' come file ''bashrc''.
+##
+## A questo punto viene lanciata una nuova shell, in particolare
+## ''bash''. Se inizialmente si era passato il parametro
+## ''commandline'', questa viene passata come parametro di
+## esecuzione ('''-c'''), altrimenti viene attivata una shell
+## interattiva.
+##
+## == limitazioni e avvertenze ==
+##
+##  * ''commandline'': tutto quello che si trova dopo il nome del progetto
+##  viene passato a bash ed eseguito as-is, pero` per via delle limitazioni
+##  dell'espansione della riga comando gli argomenti contenenti
+##  caratteri speciali o spaces verranno spezzati in componenti
+##  separati; se questo comporta problemi in
+##  caso di commandlines particolarmente complesse, che contengono
+##  ad esempio if then else o cicli, piuttosto che impazzire per
+##  trovare la giusta sequenza di escapes, meglio creare uno
+##  script e passare questo come comando
+##
+##  * adottare le tecniche di escape lanciando questo comando per
+##  passare il parametro ''commandline'', se questo contiene ad
+##  esempio variabili che devono essere interpretate dopo il profiling
+##  e non dalla vostra shell di lavoro; ad esempio, il comando
+##  {{{
+## ::filename:: progetto "ls -l $PRJ"
+##  }}}
+##  elenchera` il contenuto della directory corrente, in quanto
+## ''$PRJ'' viene interpretata dalla vostra shell, e dovrebbe essere
+## vuota (in caso contrario il comando abortisce); questa sono esempi
+## di sintassi corretta:
+##  {{{
+## ::filename:: progetto ls -l '$PRJ'
+## ::filename:: progetto ls -l \$PRJ
+##  }}}
+##
+## == vedi anche ==
+##
+## [[::wiki.prefix::jtcreate|jtcreate]]
+## [[::wiki.prefix::jtprofile|jtprofile]]
+
+. jtfunctions.sh
+
+usage()
+{
+	echo "
+this is $CMDSTR - switch to project environment
+
+usage: $CMD [options] project_name [commandline ...]
+
+options:
+  -v|--verbose	be verbose
+  -q|--quiet	be quiet
+  -D|--debug	debug
+  -b|--batch	non-interactive mode (ignored if 'command' not present)
+  --no-cd	don't change dir to \$PRJ
+  --cd dir	moves to dir after connect
+" >&2
+	exit 1
+}
+
+
+__includefile()
+{
+	local file=$1
+	echo -e "\n\n# include: '$file'\n"	>>$tmprc
+	cat "$file"				>>$tmprc
+	echo -e "\n# eof: '$file'\n"		>>$tmprc
+}
+
+
+# (MAIN)
+
+
+# 0. argument parsing and sanity checks
+#
+prjname=
+cmd=
+VERBOSE=$JTVERBOSE
+f_changedir=true
+changedir=
+f_interactive=true
+verboseflag=
+
+while [ $# != 0 ]
+do
+	case $1 in
+	  -v|--verbose)	VERBOSE=true ;;
+	  -q|--quiet)	VERBOSE=false ;;
+	  -D|--debug)	DEBUG=true ;;
+	  -b|--batch)	f_interactive=false ;;
+	  --no-cd)	f_changedir=false ;;
+	  --cd)
+	  	shift
+		[ $# = 0 ] && usage
+		[ -d "$1" ] || {
+			echo -e "\n$CMD error: directory '$1' not found\n" >&2
+			exit 1
+		}
+		changedir=$1
+		;;
+	  --)		shift ; break ;;
+	  -*|"")	usage ;;
+	  *)		[ X"$prjname" = X ] && {
+				prjname=$1
+				shift
+			}
+			break
+	esac
+	shift
+done
+
+$VERBOSE && verboseflag='--verbose' || verboseflag='--quiet'
+
+[ "X$prjname" = "X" ] && usage	# no parms?
+
+# those can be undefined if running in batch mode (ie: from cron)
+#
+$f_interactive || {
+	export HOME=${HOME:-/nonexistent}
+	export LOGNAME=${LOGNAME:-NONE}
+}
+
+
+# cleanup because jtfunctions.sh sets some default that doesn't works here
+#
+[ "X${PRJ:-}" = "X$HOME" ] && {
+	unset PRJ
+	unset PRJNAME
+	unset PRJDESC
+	unset PRJVER
+	unset PRJBATCHMODE
+	unset PRJ_BZRVER
+	unset PRJ_BZRDATE
+}
+
+[ "${PRJ:-}" != "" ] && {
+	echo "error: you are already profiled for project: $PRJNAME ($PRJ)" >&2
+	exit 1
+}
+
+if $f_interactive
+then
+	PRJBATCHMODE=false
+else
+	PRJBATCHMODE=true
+fi
+
+
+# 1. ricerca progetto nel path
+#
+PRJ=$(jtdir $verboseflag --strict "$prjname") || {
+	PRJ=$(jtdir $verboseflag --find "$prjname") || exit $?
+}
+
+
+# 2. impostazione variabili per creazione environment
+#
+prjname=$(basename "$PRJ")
+prjdesc=$(_jt_cat "$PRJ/etc/desc")
+prjver=$(_jt_cat "$PRJ/etc/version")
+prjbzrver=
+prjbzrdate=
+[ -d "$PRJ/.bzr" ] && {
+	trush=$( (cd "$PRJ" ; bzr log | sed -n -e '1,5p') )
+	prjbzrver=$(echo "$trush" | grep 'revno: ' | sed -e 's/revno: //')
+	prjbzrdate=$(echo "$trush" | grep 'timestamp: ' | sed -e 's/timestamp: //')
+	trush=
+}
+
+
+
+# 3. creazione bashrc temporaneo
+#
+tmprc=$(mktemp /tmp/$LOGNAME.tmprcXXXXXXXX) || exit 1
+:>$tmprc
+chmod 700 $tmprc
+_jt_echo " creating profile ..."
+
+# 3.1.	prima di tutto, il bashrc di sistema (cerca diversi file,
+# 	per le diverse distro)
+#
+bashrc=
+for i in /etc/bashrc /etc/bash.bashrc /usr/lib/ku-base/bashrc
+do
+	[ -f $i ] && {
+		bashrc=$i
+		break
+	}
+done
+
+# 3.2.	comincio creazione file, metto infos e impostazioni
+#	variabili environment, path
+#
+echo "# temporary bashrc for project: $prjname ($PRJ)
+# user: $LOGNAME
+#
+" >>$tmprc
+$DEBUG && echo "  set -x # DEBUG" >>$tmprc
+echo "
+. $bashrc
+
+export PRJ='$PRJ'
+export PRJNAME='$prjname'
+export PRJDESC='$prjdesc'
+export PRJVER='$prjver'
+export PRJ_BZRVER='$prjbzrver'
+export PRJ_BZRDATE='$prjbzrdate'
+export PRJBATCHMODE='$PRJBATCHMODE'
+" >>$tmprc
+
+if [ -d "$HOME" ]
+then
+	echo "export PATH=\"\$HOME/bin:\$PRJ/bin:\$PATH\""
+else
+	echo "export PATH=\"\$PRJ/bin:\$PATH\""
+fi >>$tmprc
+
+if [ "X$changedir" != "X" ]
+then
+	echo "cd '$changedir'" >>$tmprc
+else
+	$f_changedir && echo "cd '$PRJ'" >>$tmprc
+fi
+
+# 3.3.	prompt
+#
+echo '[ -f /etc/profile.d/set_ps1.sh ] && . /etc/profile.d/set_ps1.sh' >>$tmprc
+
+
+# 3.4.	include ora evenutali files di profilo in $PRJ/etc/profile.d,
+#	eventuale file personale di progetto, e il deprecato .pbashrc
+#
+cat <<@EOF@ >>$tmprc
+
+for _tmp_file in \$PRJ/etc/profile.d/*
+do
+	[ -x "\$_tmp_file" ] && . "\$_tmp_file"
+done
+unset _tmp_file
+@EOF@
+
+for file in $PRJ/etc/profile.$LOGNAME $HOME/etc/profile.$prjname
+do
+	[ -x "$file" ] && {
+		_jt_echo " including personal profile '$file'"
+		__includefile $file >>$tmprc
+		break
+	}
+done
+
+
+# deprecated custom (personal) project profiler
+#
+file=$HOME/.pbashrc
+[ -f "$file" ] && {
+	_jt_echo " including DEPRECATED personal profile '$file'"
+	__includefile $file
+}
+
+
+# 4.	alcuni cleanup
+file=$(which jtpathclean 2>/dev/null)
+[ "$file" ] && {
+	echo 'which jtpathclean >/dev/null 2>&1 && PATH=$(jtpathclean -c)' >>$tmprc
+}
+
+
+# 5.	lancio comando o shell interattiva
+#
+if [ $# == 0 ]
+then
+	echo -e "\nexecuting /bin/bash on project $prjname ($PRJ)\n"
+	$DEBUG || echo "rm -f $tmprc"	>>$tmprc
+	exec /bin/bash --rcfile $tmprc -i
+else
+	_jt_echo " executing command '$@'"
+	echo "#requested command ..."	>>$tmprc
+	echo "$@"			>>$tmprc
+	echo "status=\$?"		>>$tmprc
+	$DEBUG || echo "rm -f $tmprc"	>>$tmprc
+	echo "exit \$status"		>>$tmprc
+	if $f_interactive
+	then
+		# interactive, executes command as rcfile
+		exec /bin/bash --rcfile $tmprc -i
+	else
+		# non interactive, executes command as shells script
+		exec /bin/bash $tmprc
+	fi
+fi
+
+# never reach here

@@ -1,0 +1,66 @@
+meta implementazione struttura filesystem di progetto - appunti 
+
+ * oltre al progetto gestire organizzazione:
+
+  * subdirs della main projects dir (/data/work)
+
+  * il nome di un progetto deve essere necessariamente univoco
+  o il progetto viene identificato dalla coppia $org e $prj? o
+  al suo equivalente in path parziale, eg: $org/$prj? attenzione
+  che se il nome (=codice) del progetto non e` univoco, questo
+  potrebbe portare problemi su altri sw di gestione
+
+== profiling di progetto ==
+
+ * implementare comando/funzione che profili correttamente il
+ progetto partendo dalla directory current e risalendo
+ nell'albero fino ad incontrare la maindir di progetto
+
+ * maindir di progetto, come si distingue?
+  
+  * presenza dir .bzr: i progetti corrispondono ad un repo
+  bazaar univoco, quindi la presenza di .bzr e` sintomo, ma
+  non esclusivo, del fatto di essere nella maindir di
+  progetto; inoltre non e` detto che ci sia sempre
+
+  * dotfile o dotdir, eg: .prj?
+
+  * presenza di una o piu` directories obbligatorie?
+
+== expand/collapse filesystem di progetto ==
+
+ * quando si parla di "directory" in questo contesto si
+ intende sempre la directory stessa e tutte le subdirs
+ sottostanti, quindi la definizione corretta sarebbe
+ "ramo di filesystem", ma utilizziamo directory (che
+ e` comunque il suo nodo principale), per praticita`
+
+ * lo schema del fs (e di parti di esso) e` sotto la libdir
+ (/usr/lib/jtools) nella subdir "skel"
+
+ * oltre alle directories, lo schema contiene metafiles di
+ descrizione o istruzioni relative allo schema stesso, al
+ momento:
+ 
+  * desc: contiene una descrizione breve (una riga) del
+  contenuto previsto in quella dir
+
+  * methods: non esiste ancora, potrebbe contenere l'elenco
+  dei metodi (implementati tramite script, ad esempio)
+  ammessi per quella directory, i due metodi standard
+  sono sempre "expand" e "collapse" (possono essere
+  inibiti nelle directories leaf?)
+
+ * elenco dirs/paths obbligatori (mandatori) come presenza
+ (keep anche durante collapse)
+
+ * elenco dirs che non vanno inserite in modo literal dallo
+ schema, ma che prendono il nome assegnato al momento della
+ loro creazione; in altre parole, quei rami di fs presenti
+ nello schema che possono avere istanze multiple e con nomi
+ diversi, riducendo l'esempio migliore e` il fs completo di
+ un progetto, la sua maindir ha il nome del progetto e sotto
+ continua con lo schema
+
+
+(to be continued ...)

@@ -1,0 +1,1051 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.9"
+CMDSTR="$CMD v$CMDVER (2021-10-23)"
+
+set -e -u
+
+TOOLKIT="$CMD"
+CONFDIR="$HOME/.$CMD"
+export TOOLKIT CONFDIR
+
+
+BAZAAR=${BAZAAR:-"bzr"}		; XBAZAAR=$BAZAAR
+FOSSIL=${FOSSIL:-"fossil"}	; XFOSSIL=$FOSSIL
+GIT=${GIT:-"git"}		; XGIT=$GIT
+export BAZAAR FOSSIL GIT XBAZAAR XFOSSIL XGIT
+
+
+LOGFILE="$CONFDIR/$CMD.log"
+LOGSYSLOG="false"
+. /lib/ku-base/log.sh
+
+# KU_LOCKFILE will be set for each project
+. /lib/ku-base/lock.sh
+
+usage()
+{
+	echo "
+=== $CMDSTR == automatically update/commit projects ===
+
+usage:	$CMD [options] [-l|--long] list
+  	$CMD [options] [push/pull options] self
+  	$CMD [options] [push/pull options] [tag options] [tags] ...
+  	$CMD makeconf
+
+* list mode: list autosync definitions
+* self mode: works on current project using builtin options
+* tag mode: works on tags found in definitions database
+* makeconf mode: writes a sample config file
+  ($CONFDIR/$CMD.conf)
+
+push/pull options:
+  -u|--update		only updates (pull) -- default both
+  -c|--commit		only commits (push) -- default both
+  -n|--dry-run		don't execute nothing
+  -m txt|--comment txt	override default comment for commits
+
+tag options:
+  -r|--recursive	search recursively into directories
+
+common options:
+  -v|--verbose		verbose (default)
+  -q|--quiet		quiet, messages only to logfile
+  -D[n]|--debug[=n]	set debug, optionally set level 'n'
+" >&2
+	[ $# != 0 ] && echo -e "$@\n" >&2
+	exit 1
+}
+
+cleanup()
+{
+	trap "" 1 2 3 ERR EXIT
+	$DEBUG || rm -rf $TmpDir
+	$DEBUG && echo "DEBUG, temp dir not removed: '$TmpDir'"
+	ku_lock_remove
+	trap 1 2 3 ERR EXIT
+	return 0
+}
+
+vecho()
+{
+	$VERBOSE && echo -e "$@" || :
+}
+
+do_list()
+{
+	local tags=
+	local tag=
+	local fmt="%-8s %-30.30s %-20.20s %-5s %-5s "
+	local path=
+	local srch=
+	local recur=
+	local prjlist=
+	local prj=
+	local count=
+
+	if [ $# != 0 ]
+	then
+		tags=$*
+	else
+		tags=$(jtconf -i $TmpDefines $dbgflag --list sync. | sed -e 's/^sync.//') || return $?
+	fi
+
+	$f_long && printf "$fmt\n" "TAG" "PATH" "PRJLIST" "SRCH" "RECUR"
+
+	set +e	# disable abort-on-error
+
+	for tag in $tags
+	do
+		path=$(jtconf -i $TmpDefines $dbgflag sync.$tag.path 2>/dev/null) || {
+			echo "error, tag '$tag' doesn't exists" >&2
+			continue
+		}
+		if $f_long
+		then
+			srch=$(get_bool sync.$tag.auto_search 2>/dev/null)
+			recur=$(get_bool sync.$tag.recursive 2>/dev/null)
+			prjlist=$(jtconf -i $TmpDefines $dbgflag sync.$tag.prjlist 2>/dev/null)
+			path=$(find_path "$path")
+
+			printf "$fmt" $tag "$path" "$prjlist" "$srch" "$recur"
+
+			[ -z "$path" ] && {
+				echo "error, path not defined"
+				continue
+			}
+
+			$f_recurse && recur=true	# forced by args
+
+			$srch && {
+				count=$(find_projects "$path" $recur | wc -l)
+				echo "$count project(s)"
+				continue
+			}
+
+			[ -z "$prjlist" ] && {
+				is_project "$path" \
+					&& echo "(self) 1 project" \
+					|| echo "(self) project not found"
+				continue
+			}
+			count=$(list_projects "$path" "$prjlist" | wc -l)
+			echo "$count project(s)"
+		else
+			echo $tag
+		fi
+	done
+	return 0
+}
+
+get_bool()
+{
+	local out=
+	local stat=
+	out=$(jtconf -i $TmpDefines $dbgflag $*)
+	stat=$?
+	out=$(echo "$out" | tr '[A-Z]' '[a-z]')
+	case $out in
+		1|yes|on|true)	echo "true" ;;
+		*)		echo "false" ;;
+	esac
+	return $stat
+}
+
+find_projects()
+{
+	local path="$1"
+	local recurse=$2
+	local dir=
+	(
+		if $recurse
+		then
+			(cd "$path" ; find * -type d)
+		else
+			ls "$path"
+		fi
+	) | while read dir
+	do
+		is_project "$path/$dir" && echo "$dir"
+	done
+}
+list_projects()
+{
+	local path=$1 ; shift
+	local dir=
+	local here=$(pwd)
+
+	cd "$path" || return $?
+	ls -d $* 2>/dev/null | while read dir
+	do
+		is_project "$dir" && echo "$dir"
+	done
+	cd "$here"
+	return 0
+}
+is_project()
+{
+	_PRJFORMAT=
+
+	[ -f "$1/_FOSSIL_" ] && {
+		_PRJFORMAT="FOS"
+		return 0
+	}
+	[ -d "$1/.bzr" ] && {
+		_PRJFORMAT="BZR"
+		return 0
+	}
+	[ -d "$1/.git" ] && {
+		_PRJFORMAT="GIT"
+		return 0
+	}
+	return 1
+}
+find_path()
+{
+	local path=$1
+	local tag=
+
+	case $1 in
+	 /*|./*) ;;
+	 *)	path=$HOME/$1 ;;
+	esac
+	[ -d "$path" ] && {
+		echo "$path"
+		continue
+	}
+	echo "tag/path '$path' not found" >&2
+	return 1
+}
+
+list_projects_fullpaths()
+{
+	local tag=$1
+	local path=
+
+	path=$(jtconf -i $TmpDefines $dbgflag sync.$tag.path 2>/dev/null) || {
+		echo "error, tag '$tag' not found" >&2
+		return 1
+	}
+
+	local srch=$(get_bool sync.$tag.auto_search 2>/dev/null)
+	local recur=$(get_bool sync.$tag.recursive 2>/dev/null)
+	local prjlist=$(jtconf -i $TmpDefines $dbgflag sync.$tag.prjlist 2>/dev/null)
+	local prj=
+
+	path=$(find_path "$path") || return $?
+
+	$f_recurse && recur=true	# forced by args
+
+	$srch && {
+		for prj in $(find_projects "$path" $recur)
+		do
+			echo "$path/$prj"
+		done
+		return 0
+	}
+	[ -z "$prjlist" ] && {
+		is_project "$path" && {
+			echo "$path"
+			return 0
+		}
+		echo "project '$path' not found" >&2
+		return 1
+	}
+	for prj in $(list_projects "$path" "$prjlist")
+	do
+		echo "$path/$prj"
+	done
+	return 0
+}
+
+do_update_commit()
+{
+	local tag=$1
+	local dir=
+	local fmt=
+	local cnt=0
+	local tot=$(list_projects_fullpaths $tag | wc -l)
+	local stat=0
+	local prjfile="$TmpDir/projects"
+
+	list_projects_fullpaths $tag >$prjfile
+	
+	exec 9<&0 <$prjfile
+	while read dir
+	do
+		cnt=$(expr $cnt + 1)
+		is_project "$dir" || continue
+
+		KU_LOCKFILE="$dir/.$CMD.lock"
+		ku_lock_is_active && continue || :
+		ku_lock || continue
+
+		vecho -e "\n$cnt/$tot $_PRJFORMAT - $dir" >&2
+		ku_log "  project $cnt/$tot: $_PRJFORMAT $dir"
+		check_remote $tag "$dir" && {
+			$f_update && {
+				do_update $tag "$dir" || {
+					stat=$?
+					continue
+				}
+			}
+			$f_commit && {
+				do_commit $tag "$dir" || {
+					stat=$?
+					continue
+				}
+			}
+		}
+
+		ku_lock_remove
+	done
+	exec 0<&9 9<&-
+
+	return $stat
+}
+
+check_remote()
+{
+	local tag=$1
+	local dir=$2
+	local here=$(pwd)
+	local remote=
+
+	cd "$dir" || return $?
+	is_project "$dir"
+	
+	case $_PRJFORMAT in
+	  BZR) remote=$($BAZAAR info | grep 'of branch: ' | sed -e 's/.*branch: //') ;;
+	  FOS) remote=$($FOSSIL remote-url) ;;
+	  GIT) remote=$($GIT config --get remote.origin.url)
+	esac
+
+	[ -z "$remote" ] && {
+		ku_log "can't determine 'remote' for path '$dir' (format: $_PRJFORMAT)"
+		return 1
+	}
+	remote=$(echo "$remote" | sed -e 's#.*://##' -e 's#/.*##' -e 's/:.*//' \
+		-e 's/.*@//')
+
+	ping -q -c 1 -w 5 $remote >/dev/null 2>&1 && return 0
+	ku_log "    skip non-reachable server: $remote" >&2
+	return 1
+}
+
+
+do_update()
+{
+	local tag=$1
+	local dir=$2
+	local here=$(pwd)
+	local stat=1
+	cd "$dir" || return $?
+
+	vecho -n "  update: " >&2
+	VERBOSE='false' ku_log "    update"
+	is_project "$dir"
+	case $_PRJFORMAT in
+	  BZR)	bazaar_update $tag; stat=$? ;;
+	  FOS)	fossil_update $tag; stat=$? ;;
+	  GIT)	git_update $tag; stat=$? ;;
+	esac
+	VERBOSE='false' ku_log "    update exited $stat"
+
+	cd "$here"
+	return $stat
+}
+
+do_commit()
+{
+	local tag=$1
+	local dir=$2
+	local here=$(pwd)
+	local stat=1
+	local out=
+
+	cd "$dir" || return $?
+
+	vecho -n "  commit: " >&2
+	VERBOSE='false' ku_log "    commit"
+	is_project "$dir"
+	case $_PRJFORMAT in
+	  BZR)	bazaar_commit $tag; stat=$? ;;
+	  FOS)	fossil_commit $tag; stat=$? ;;
+	  GIT)	git_commit $tag; stat=$? ;;
+	esac
+
+	VERBOSE='false' ku_log "    commit exited $stat"
+
+	[ -s $TmpComments ] && {
+		ku_log "commit comment:"
+		ku_loglines < $TmpComments
+	}
+
+	cd "$here"
+	return $stat
+}
+
+
+create_self_defines()
+{
+	PRJ=${PRJ:-""}
+  	[ "X$PRJ" = "X" ] && {
+		usage "you can use self mode only inside a valid project"
+	}
+	vecho "(working on myself, project $PRJNAME)"
+	echo "# self defines for project $PRJNAME
+[sync.self]
+  path		$PRJ
+  prjlist
+  auto_search	no
+  recursive	no
+  autoadd	yes
+" >$TmpDefines
+	return 0
+}
+
+do_makeconf()
+{
+	local out=$CONFDIR/$CMD.conf
+	echo "
+# SAMPLE ENTRIES CREATED ON $(date)
+
+# works on one project, pointed by path
+#
+[sync.SAMPLE_DIRECT]
+  path		/some/path/myproject
+  prjlist
+  auto_search	no
+  recursive	no
+  autoadd	yes
+
+# works on /some/path/prj1 /some/path/prj2
+#
+[sync.SAMPLE_LISTED]
+  path		/some/path
+  prjlist	prj1 prj2
+  auto_search	no
+  recursive	no
+  autoadd	yes
+
+# works on all /some/path/* projects
+#
+[sync.SAMPLE_AUTOSEARCH]
+  path		/some/path
+  prjlist
+  auto_search	yes
+  recursive	no
+  autoadd	yes
+
+# works on ALL /some/path tree projects
+# (beware! this can be huge)
+#
+[sync.SAMPLE_ALLRECURSIVE]
+  path		/some/path
+  prjlist
+  auto_search	yes
+  recursive	yes
+  autoadd	yes
+" >>$out
+	echo "sample entries added to '$out'"
+	return 0
+}
+
+
+
+
+
+# fossil --------------------------------------------------------------------------------
+
+
+fossil_update()
+{
+	local tag=$1
+	local stat=0
+	local updatelog="$TmpDir/fossil_update"
+
+	fossil_sync $tag pull || return $?
+
+	$DryRun jtreset jtcj --batch $(pwd) jtfos-update -x >$updatelog 2>&1
+	stat=$?
+	if ! egrep -q '^ADD|^UPDATE|^REMOVE|^MERGE|^CONFLICT' $updatelog
+	then
+		vecho "none" >&2
+		VERBOSE='false' ku_log "     not needed"
+		return 0
+	fi
+
+	vecho >&2
+	cat $updatelog >&2
+	return $stat
+}
+
+
+
+fossil_commit()
+{
+	local tag=$1
+	local stat=0
+	local msg=
+	local autoadd=$(get_bool sync.$tag.autoadd 2>/dev/null)
+	local commitlog="$TmpDir/fossil_commit"
+
+	$autoadd && {
+		$XFOSSIL add >$commitlog 2>&1 || {
+			ku_log " error $? running $XFOSSIL add"
+			vecho >&2
+			cat $commitlog >&2
+			return 1
+		}
+	}
+	$FOSSIL status >>$TmpComments
+
+	[ -z "$($FOSSIL status | grep '^[A-Z]')" ] && {
+		vecho "none" >&2
+		VERBOSE='false' ku_log "     not needed"
+		rm -f $TmpComments
+		return 0
+	}
+	if $f_dry_run
+	then
+		$DryRun jtscm-save-mtimes
+	else
+		jtreset jtcj --batch "$dir" jtscm-save-mtimes >$commitlog 2>&1 || {
+			ku_log "error saving mtimes: $(cat $commitlog)"
+			return 1
+		}
+	fi
+
+
+	$DryRun jtreset jtcj --batch $(pwd) jtfos-commit -M $TmpComments
+	stat=$?
+	if msg=$(grep "^New_Version: " $commitlog)
+	then
+		vecho "$msg" >&2
+		VERBOSE='false' ku_log "      $msg"
+	else
+		vecho >&2
+		cat $commitlog >&2
+	fi
+
+	fossil_sync $tag push || return $?
+	return $stat
+}
+
+
+
+fossil_sync()
+{
+	local tag=$1
+	local action=$2
+	local stat=0
+	local lastpull="$TmpDir/fossil_lastpull"
+	local synclog="$TmpDir/fossil_synclog"
+
+	cp /dev/null $lastpull
+
+	case $action in
+	  pull|push) ;;
+	  *)	action="sync" ;;
+	esac
+
+	vecho -en "sync ... " >&2
+	VERBOSE='false' ku_log "     sync ($action)"
+
+	$XFOSSIL $action >$synclog 2>&1 && {
+		grep -q 'waiting for server\.\.\.redirect to' $synclog && stat=1
+		grep -q 'Error: ' $synclog && stat=1
+	}
+	[ $stat != 0 ] && {
+		echo "$errmsg" >&2
+		cat $synclog >&2
+		VERBOSE='false' ku_log "     sync ($action) exited $stat"
+		return $stat
+	}
+	case $action in
+	  pull|sync)
+		jtreset jtcj --batch "$dir" \
+			jtscm-restore-mtimes --lastpull $lastpull $dbgflag >$synclog 2>&1 || {
+			ku_log "error restoring mtimes: $(cat $synclog)"
+			return 1
+		}
+		fossil_resolve_conflicts $tag $synclog
+		;;
+	esac
+		
+	return $stat
+}
+
+
+fossil_resolve_conflicts()
+{
+	local tag=$1
+	local logfile=$2
+	local ext=
+	local file=
+	local msg=
+	local fname=
+	local fext=
+
+	echo ">>> WARN: fossil_resolve_conflicts NOT YET IMPLEMENTED <<<" >&2
+	return 0
+}
+
+
+
+# bazaar --------------------------------------------------------------------------------
+
+
+
+bazaar_update()
+{
+	local tag=$1
+	local stat=0
+	local lastpull="$TmpDir/bazaar_lastpull"
+	local updatelog="$TmpDir/bazaar_update"
+
+	cp /dev/null $lastpull
+
+	$XBAZAAR update >$updatelog 2>&1
+	stat=$?
+	grep -q 'up to date' $updatelog && {
+		vecho "none" >&2
+		VERBOSE='false' ku_log "     not needed"
+		return 0
+	}
+
+	vecho >&2
+	cat $updatelog >&2
+
+	if [ $stat = 0 ]
+	then
+		jtreset jtcj --batch "$dir" \
+			jtscm-restore-mtimes --lastpull $lastpull $dbgflag >$updatelog 2>&1 || {
+			ku_log "error restoring mtimes: $(cat $updatelog)"
+			return 1
+		}
+		bazaar_resolve_conflicts
+	fi
+	return $stat
+}
+
+
+
+
+bazaar_commit()
+{
+	local tag=$1
+	local stat=0
+	local autoadd=$(get_bool sync.$tag.autoadd 2>/dev/null)
+	local commitlog="$TmpDir/bazaar_commit"
+
+	$autoadd && {
+		$XBAZAAR add >$commitlog 2>&1 || {
+			ku_log " error $? running $XBAZAAR add"
+			vecho "" >&2
+			cat $commitlog >&2
+			return 1
+		}
+	}
+	$BAZAAR status >>$TmpComments
+
+	[ -z "$($BAZAAR status)" ] && {
+		vecho "none" >&2
+		VERBOSE='false' ku_log "     not needed"
+		rm -f $TmpComments
+		return 0
+	}
+	if $f_dry_run
+	then
+		$DryRun jtscm-save-mtimes
+	else
+		jtreset jtcj --batch "$dir" jtscm-save-mtimes >$commitlog 2>&1 || {
+			ku_log "error saving mtimes: $(cat $commitlog)"
+			return 1
+		}
+	fi
+
+	$XBAZAAR commit -m "$comment"
+	stat=$?
+	return $stat
+}
+
+# clean up conflicts mess (extensions mess)
+#
+bazaar_resolve_conflicts()
+{
+	local tag=$1
+	local ext=
+	local file=
+	local msg=
+	local fname=
+	local fext=
+
+	for ext in BASE OTHER THIS
+	do
+		find * -name "*.$ext" | while read file
+		do
+			fname=$(echo "$file" | sed -e "s/\.${ext}$//")
+			fext=$(echo "$fname" | sed -e "s/.*\.\([^.]*\)$/\1/")
+			fname=$(echo "$fname" | sed -e "s/\.${fext}$//")
+			case $ext in
+				BASE)	fname="$fname.MERGED.$fext" ;;	# merged?
+				OTHER)	fname="$fname.UPDATED.$fext" ;;	# the updated one
+				THIS)	fname="$fname.$fext" ;;		# restore local one
+			esac
+			mv "$file" "$fname"
+		done
+	done
+
+	msg=$(
+		$BAZAAR status | grep "Contents conflict in" | \
+			sed -e 's/.*Contents conflict in //'
+		for ext in MERGED UPDATED
+		do
+			find * -name "*.$ext.*"
+		done | sort)
+
+	[ "$msg" != "" ] && {
+		fname=$(pwd) ; fname=$(basename $fname)
+		msg="WARNING! Conflicts detected on $fname, please check:\n\n$msg"
+		msg="$msg\n\nNote: conflicts were automatically resolved, you must"
+		msg="$msg\ncheck and manually remove the created files before"
+		msg="$msg\nnext commit."
+		ku-message "$msg"
+	}
+
+	$BAZAAR status | grep "Contents conflict in" | \
+		sed -e 's/.*Contents conflict in //' | while read file
+	do
+		$XBAZAAR resolve "$file"
+	done
+	return 0
+}
+
+
+
+
+# git --------------------------------------------------------------------------------
+
+
+
+git_update()
+{
+	local tag=$1
+	local stat=0
+	local lastpull="$TmpDir/lastpull"
+	local updatelog="$TmpDir/git_update"
+
+	cp /dev/null $lastpull
+
+	git_run pull >$updatelog 2>&1
+	stat=$?
+	grep -q 'up-to-date' $updatelog && {
+		vecho "none" >&2
+		VERBOSE='false' ku_log "     not needed"
+		return 0
+	}
+
+	vecho >&2
+	cat $updatelog >&2
+
+	# conflict:
+	#
+	#error: Your local changes to the following files would be overwritten by merge:
+	#        testfile
+	#Please, commit your changes or stash them before you can merge.
+
+	if grep -q 'error: Your local changes .* merge:' $updatelog
+	then
+		ku_log "  conflicts detected, resolving ..."
+
+		stat=0
+		git_resolve_conflicts $tag $updatelog || return $?
+
+		$XGIT add . || {
+			stat=$?
+			ku_log "ERROR $XGIT add . RETURNS $stat"
+			return $stat
+		}
+		git_run pull >$updatelog 2>&1 || {
+			stat=$?
+			ku_log "ERROR $XGIT pull RETURNS $stat"
+			vecho
+			cat $updatelog
+		}
+	fi
+
+	if [ $stat = 0 ]
+	then
+		jtreset jtcj --batch "$dir" \
+			jtscm-restore-mtimes --lastpull $lastpull $dbgflag >$updatelog 2>&1 || {
+			ku_log "error restoring mtimes: $(cat $updatelog)"
+			return 1
+		}
+	fi
+	return $stat
+}
+
+
+
+
+git_commit()
+{
+	local tag=$1
+	local stat=0
+	local autoadd=$(get_bool sync.$tag.autoadd 2>/dev/null)
+	local emails=$(jtconf -i $TmpDefines $dbgflag sync.$tag.email 2>/dev/null)
+	local email=
+	local emailbody=
+	local commitlog="$TmpDir/git_commit"
+	local remoteurl=
+	local passwd=
+
+	$autoadd && {
+		$XGIT add "." >$commitlog 2>&1 || {
+			ku_log " error $? running $XGIT add '.'"
+			vecho "" >&2
+			cat $commitlog >&2
+			return 1
+		}
+	}
+	$GIT status >>$TmpComments
+
+	grep -q 'nothing to commit' $TmpComments && {
+		vecho "none" >&2
+		VERBOSE='false' ku_log "     not needed"
+		rm -f $TmpComments
+		return 0
+	}
+
+	if $f_dry_run
+	then
+		$DryRun jtscm-save-mtimes
+	else
+		jtreset jtcj --batch "$dir" jtscm-save-mtimes >$commitlog 2>&1 || {
+			ku_log "error saving mtimes: $(cat $commitlog)"
+			return 1
+		}
+	fi
+
+	$XGIT commit -a --file $TmpComments || return $?
+	git_run push || return $?
+
+	[ "X$email" != "X" ] && {
+		emailbody=$(jtgit-changes)
+		for email in $(echo "$emails" | tr ',' ' ')
+		do
+			echo "$emailbody" | mail \
+				-s "[$CMD] project changes $(basename $PRJ)" \
+				$email
+		done
+	}
+
+	return 0
+}
+
+# clean up conflicts mess (extensions mess)
+#
+git_resolve_conflicts()
+{
+	local tag=$1
+	local logfile=$2
+	local ext=
+	local file=
+	local fname=
+	local uname=$(uname -n | sed -e 's/\..*//')
+	local tstamp=$(date '+%Y%m%d-%H%M')
+	local newname=
+
+	# conflict:
+	#
+	#error: Your local changes to the following files would be overwritten by merge:
+	#        testfile
+	#Please, commit your changes or stash them before you can merge.
+
+	echo -e "\n\n# CONFLICTS DETECTED\n" >>$TmpComments
+
+	sed -e '1,/error: Your local/d' -e '/Please, commit/,$d' $logfile | while read file
+	do
+		if echo "X$file" | fgrep -q '.'
+		then
+			ext=$(echo "X$file" | sed -e "s/.*\.\([^.]*\)$/\1/")
+			fname=$(echo "X$file" | sed -e "s/\.${ext}$//" -e 's/^X//')
+			newname="$fname-$uname-$tstamp.$ext"
+		else
+			newname="$file-$uname-$tstamp"
+		fi
+		mv -- "$file" "$newname" || return $?
+		ku_log "  autorenamed '$file' -> '$newname'"
+		echo "# autorenamed: '$file' -> '$newname'" >>$TmpComments
+	done
+	echo "" >>$TmpComments
+
+	return 0
+}
+
+
+git_run()
+{
+	# use saved credentials?
+	#
+	# ps: I cannot believe that git don't have the usual, simple way to get the
+	# password/token directly from env, but needs to RUN an external helper to
+	# do this; and NO, don't follows advices on internet to embed credentials
+	# in the url, or to write a simple helper that echoes credentials from
+	# commandline, exposing credentials on a commandline is ALWAYS A BAD THING
+	#
+	[ -f $HOME/.git_credentials ] && {
+		remoteurl=$(git config --get remote.origin.url)
+		for remoteurl in "$remoteurl" $(dirname "$remoteurl")
+		do
+			grep -q "^$remoteurl\s" $HOME/.git_credentials && {
+				echo -e "\n  git_run(): using credentials from $HOME/.git_credentials\n" >&2
+				grep "^$remoteurl\s" $HOME/.git_credentials | awk '{ print $2; }' >"$TmpDir/git_pass"
+				export GIT_ASKPASS="$TmpDir/git_askpass"
+				echo -e "#!/bin/bash\ncat $TmpDir/git_pass" >$GIT_ASKPASS
+				chmod +x $GIT_ASKPASS
+			}
+		done
+	}
+	$XGIT "$@" || return $?
+	return 0
+}
+
+
+
+# (MAIN)
+
+trap 'export VERBOSE=true; ku_log "*INTR*"; cleanup; exit 255' 1 2 3
+trap 'echo -e "\nunexpected error $st at $LINENO\n"' ERR
+trap 'cleanup' EXIT
+
+f_update=true
+f_commit=true
+f_long=false
+f_recurse=false
+f_dry_run=false
+DryRun=
+f_do_list=false
+f_self=false
+f_makeconf=false
+VERBOSE=true
+DEBUG=false
+dbgflag=
+
+TmpDir=$(mktemp -d /tmp/$CMD-XXXXXXXXX)
+readonly TmpDir
+
+TmpDefs="$TmpDir/TmpDefines"
+TmpComments="$TmpDir/comments"
+TmpDefines="$TmpDir/defines"
+
+comment_args=
+comment=""
+errmsg="$(tput bold 2>/dev/null)* ERROR *$(tput sgr0 2>/dev/null)"
+tags=
+
+export _PRJFORMAT=	# set by 'is_project', holds repo type (GIT, BAZAAR, FOSSIL, NONE)
+
+
+while [ $# != 0 ]
+do
+ case $1 in
+  -v|--verbose)	VERBOSE=true ;;
+  -q|--quiet)	VERBOSE=false ;;
+  -l|--long)	f_long=true ;;
+  -r|--recur*)	f_recurse=true; comment_args="$comment_args $1" ;;
+  -u|--update)	f_commit=false; comment_args="$comment_args $1" ;;
+  -c|--commit)	f_update=false; comment_args="$comment_args $1" ;;
+  -D|--debug)	DEBUG=true ;;
+  -D[0-9]|--debug=[0-9])
+  	DEBUG=true
+	dbgflag=$1
+	;;
+  -n|--dry-run)
+  	f_dry_run=true
+	DryRun="echo (dummy)"
+	XBAZAAR="$DryRun $XBAZAAR"
+  	XFOSSIL="$DryRun $XFOSSIL"
+	XGIT="$DryRun $XGIT"
+	;;
+  -m|--comment)
+  	shift
+	[ $# = 0 ] && usage
+	comment="$1"
+	;;
+  --)		break ;;
+  -*|"")	usage ;;
+  list)		f_do_list=true ;;
+  self) 	f_self=true ;;
+  makeconf)	f_makeconf=true ;;
+  *)
+	$f_self && usage "self mode doesn't accepts tags list"
+	tags="$tags $1"
+	;;
+ esac
+ shift
+done
+
+
+[ -d $CONFDIR ] || {
+	mkdir $CONFDIR || exit $?
+}
+:> $TmpDefines
+
+$f_makeconf && {
+	do_makeconf
+	exit 0
+}
+
+$f_self && {
+	create_self_defines
+	tags="self"
+}
+
+$f_do_list && {
+	do_list $tags
+	exit $?
+}
+
+
+[ -z "$tags" ] && usage
+
+echo -e "$comment\n\nCMD: $CMD$comment_args $tags\n" >$TmpComments
+
+
+
+# do update/push
+
+ku_cap_logfile || exit $?
+
+if $VERBOSE
+then
+	exec 2>&1 | tee -a $LOGFILE
+else
+	exec >>$LOGFILE 2>&1
+fi
+
+
+
+ku_log "started PRJ=$PRJ f_commit=$f_commit f_update=$f_update $tags"
+
+stat=0
+
+for tag in $tags
+do
+	ku_log " processing tag: $tag"
+	do_update_commit $tag || {
+		ku_log " error $? processing tag: $tag"
+		stat=1
+	}
+	vecho
+done
+
+ku_log "ended status=$stat"
+exit $stat

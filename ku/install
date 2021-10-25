@@ -1,0 +1,40 @@
+:TOOLKIT	jtools
+:VERSION	1.1
+:RELEASE	ku21.10a
+:SIGNATURE	${VERSION}-${RELEASE} (2021-10-23)
+:description	KUBiC Labs Projects Management Tools
+
+:maintainer	Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+:homepage	http://www.kubiclabs.com/
+:copy1		(c) $maintainer
+:copy2		for copyright see /usr/share/doc/$TOOLKIT/copyright
+
+:dir		$bindir
+:dir		$libdir
+:dir		$libdir/templates
+:dir		$libdir/install
+:dir		$libdir/install/prev
+:dir		$confdir
+:dir		$confdir/conf.d
+:dir		$etcdir/profile.d
+:dir		$docdir
+
+:default_owner	root:root
+:default_mode	664
+
+conf/*		$confdir/
+conf.d/*	$confdir/conf.d/
+docs/*		$docdir/
+templates/*	$libdir/templates/
+
+:default_mode	755
+
+bin/*		$bindir/
+#lib/*		$libdir/
+
+misc/jtools.sh	$etcdir/profile.d/
+
+
+install/*	$libdir/install/	root:root 644 NOPARSE
+install/*.sh	$libdir/install/	root:root 755 NOPARSE
+install-prev/*	$libdir/install/prev/	root:root 444 NOPARSE

@@ -1,0 +1,177 @@
+#!/usr/bin/perl
+#
+# __copy1__
+# __copy2__
+#
+use strict;
+
+# get common functions and set $Cmd var
+#
+my $Cmd = $0; $Cmd =~ s/\/[^\/]+$//;
+require "$Cmd/jtconf-functions.pl";
+$Cmd	= $0; $Cmd =~ s/.*\///;
+
+# oggetto di configurazione
+#
+Debug( 0 );
+my $DB;
+
+
+# se 1 allora abortisce se non riesce a sostituire tutte
+# le definizioni, se 0 non abortisce (solo warning)
+# (opzione -w)
+#
+my $F_abort_on_undef	= 1;
+
+# true=esegue solo parsing di sostituzione variabili, e non
+# il resto (accentate, ecc)
+#
+my $F_only_variables	= 0;
+
+# true = esegue parsing recursivo variabili interne
+#
+my $f_parse		= 1;
+
+
+# output buffer
+#
+my $out;
+my $IN	= "";
+
+my @includes;
+
+while (@ARGV) {
+    CASE: {
+	$_	= shift( @ARGV );
+
+	if ($_ eq "-w" || $_ eq "--warnings") {
+		$F_abort_on_undef = 0;
+		last CASE;
+	}
+	if ($_ eq "-s" || $_ eq "--simple") {
+		$F_only_variables = 1;
+		last CASE;
+	}
+	if ($_ eq "-D" || $_ eq "--debug") {
+		if (defined $ARGV[0] && $ARGV[0] =~ /^[0-9]/) {
+			Debug( shift @ARGV );
+		} else {
+			Debug( 1 );
+		}
+		last CASE;
+	}
+	if ($_ eq "-i" || $_ eq "--include") {
+		usage( "-i needs a filename" )		if (!scalar @ARGV || $ARGV[0] =~ /^-/);
+		push( @includes, shift(@ARGV) );
+		last CASE;
+	}
+	if ($_ eq "--vartag") {
+		usage()		if (!scalar @ARGV || $ARGV[0] =~ /^-/);
+		VarTag( shift(@ARGV) );
+		last CASE;
+	}
+	if ($_ eq "-") {
+		$IN	= "STDIN";
+		last CASE;
+	}
+	if ($_ eq "-n" || $_ eq "--noparse") {
+		$f_parse = 0;
+		last CASE;
+	}
+	if ($_ =~ /^-/ || $_ eq "") {
+		usage( "unknown parm", $_ );
+	}
+	if ($IN ne "") {
+		usage( "only one input file allowed" );
+	}
+	$IN = $_;
+    }
+}
+
+if ($IN eq "") {
+	usage( "input file needed (or - for stdin)" );
+}
+
+# load defines
+#
+$DB = load_defines();
+
+# append data from additional files
+#
+foreach $_ (@includes) {
+	$DB->read( $_ );	# ignore errors
+}
+
+
+
+# read input, parse, write output
+#
+printf( STDERR "  parsing file '%s' ...\n", $IN )	if Debug();
+
+my $lineno	= 0;
+my $buf;
+my @lines;
+my $line;
+
+if ($IN eq "STDIN") {
+	@lines	= <STDIN>;
+} else {
+	open( IN, "<$IN" )	or die "can't open $IN: $!\n";
+	@lines	= <IN>;
+	close( IN )		or die "error reading $IN: $!\n";
+}
+
+foreach $line (@lines) {
+	$lineno ++;
+	$buf	= parse_buf( $DB, $line, $lineno, 1, $f_parse );
+	$buf	=~ s/\\\\/__BACKSLASH_ESCAPED__/g;
+	if (!$F_only_variables) {
+		$buf	=~ s/\\n/\n/g;
+		$buf	=~ s/a`/a'/g;
+		$buf	=~ s/e`/e'/g;
+		$buf	=~ s/i`/i'/g;
+		$buf	=~ s/o`/o'/g;
+		$buf	=~ s/u`/u'/g;
+	}
+	$buf	=~ s/__BACKSLASH_ESCAPED__/\\/g;
+	$out	.= $buf;
+}
+
+print $out;
+
+
+my %Undef	= Unresolved();
+my @undef_lines	= sort keys %Undef;
+
+if (@undef_lines) {
+	printf( STDERR "WARNING, UNDEFINED VARS IN FILE: %s\n", $IN );
+	foreach my $lineno (@undef_lines) {
+		printf( STDERR " line %4d: %s\n", $lineno, $Undef{$lineno} )
+	}
+	if ($F_abort_on_undef) {
+		die( "abort\n" );
+	}
+}
+exit( 0 );
+
+
+
+sub usage()
+{
+	print( STDERR "\nerror: ", @_, "\n" )	if (scalar @_);
+
+	die "
+usage: $Cmd [options] inputfile
+
+options:
+   -w|--warnings	don't abort on undefined values
+   -s|--simple		replaces only variables
+   -D|--debug [n]	activate debug mode (optional set debug level 1 .. 9)
+   -i|--include f	append file <f> to the search path (can be used many times)
+   -n|--noparse		do not recursively expand internal db variabiles
+  --vartag string	use <string> as variable delimiter (default is '" . VarTag() . "')
+  			you can also use the alternative escaped vartag sequence '" . EscapedVarTag() . "'
+			that is always replaced by default vartag at the last
+			parsing stage
+\n";
+}

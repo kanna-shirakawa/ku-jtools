@@ -1,0 +1,157 @@
+#!/usr/bin/perl -w
+#
+# __copy1__
+# __copy2__
+#
+use warnings;
+use strict;
+
+my $CMD		= "jtmkpath";
+my $CMDVER	= "1.2";
+my $CMDSTR	= "$CMD v$CMDVER (2020/11)";
+
+my $verbose	= 0;
+my $dummy	= 0;
+my $fixperms	= 0;
+my $Debug	= 0;
+
+my $path;
+my $owner;
+my $mode;
+my $arg;
+
+PARMS: while (@ARGV) {
+    CASE: {
+    	$arg	= shift(@ARGV);
+	if ($arg eq "-n" || $arg eq "--dummy")		{ $dummy = 1; $verbose = 1; last CASE; }
+	if ($arg eq "-v" || $arg eq "--verbose")	{ $verbose = 1; last CASE; }
+	if ($arg eq "-q" || $arg eq "--quiet")		{ $verbose = 0; last CASE; }
+	if ($arg eq "-f" || $arg eq "--fixperms")	{ $fixperms = 1; last CASE; }
+	if ($arg eq "-D" || $arg eq "--debug")		{ $Debug = 1; last CASE; }
+	if ($arg eq "--") { last PARMS; }
+	if ($arg =~ /^-/) { usage(); }
+	$path = $arg;
+	last PARMS;
+    }
+}
+
+usage( "missing 'path' parm" )	if (!defined $path);
+
+if (scalar(@ARGV) >= 1) { $owner = shift( @ARGV ); }
+if (scalar(@ARGV) >= 1) { $mode = shift( @ARGV ); }
+if (scalar @ARGV != 0) {
+	usage( "extra parms: " . join( " ", @ARGV ) );
+}
+
+undef $owner	if (defined $owner && ($owner eq "" || $owner eq "-"));
+
+usage( "owner must be in the form user:group" )		if (defined $owner && $owner !~ /:/);
+usage( "mode must be in the octal form (eg: 0775)" )	if (defined $mode && $mode !~ /^\d\d\d\d*$/);
+
+my $basedir;
+my $leadslash	= "/";
+my @fullpath	= ();
+my ($cur_user, $cur_group, $cur_mode);
+
+# relative path?
+#
+if ($path !~ /^\//) {
+	$leadslash	= "";
+	$path		= "./" . $path;
+}
+
+$path	=~ s#//#/#g;
+$path	=~ s/\/$//;
+
+$basedir	= $path;
+$basedir	=~ s/\/[^\/]+$//;
+
+pdebug( "%s '%s'\n", $0, $path );
+
+# create basedir if needed, using owners and mode derived from
+# the last existent directory in the path
+#
+pdebug( "create basedir='%s'\n", $basedir );
+
+foreach $_ (split( '/', $basedir )) {
+	next	if ($_ eq "");
+	pdebug( " eval path component '%s'\n", $_ );
+	push( @fullpath, $_ );
+	my $fullpath = $leadslash . join( "/", @fullpath );
+	pdebug( "  consider fullpath='%s'\n", $fullpath );
+	if (-d $fullpath) {
+		$cur_user	= `stat --format '%U' $fullpath`; chomp($cur_user);
+		$cur_group	= `stat --format '%G' $fullpath`; chomp($cur_group);
+		$cur_mode	= `stat --format '%a' $fullpath`; chomp($cur_mode);
+		chomp($cur_user); chomp($cur_group); chomp($cur_mode);
+		pdebug( "  exists, set cur_user='%s' cur_group='%s' cur_mode='%s'\n", $cur_user, $cur_group, $cur_mode );
+	} else {
+		makedir( $fullpath, "$cur_user:$cur_group", $cur_mode, $verbose, 0 );
+	}
+}
+$owner	= "$cur_user:$cur_group"	if (!defined $owner);
+$mode	= $cur_mode			if (!defined $mode);
+
+makedir( $path, $owner, $mode, $verbose, $fixperms );
+
+exit( 0 );
+
+
+sub usage
+{
+	print( STDERR "\nerror: ", @_, "\n" )	if (@_);
+	die( "
+== $CMDSTR == smart mkdir, creates missing path respecting existing owner/modes ==
+
+usage: $0 [options] path [owner [mode]]
+
+options:
+  -n|--dummy	dummy mode (implies verbose)
+  -f|--fixperms	force fix perms on existing target dir
+  -v|--verbose	be verbose
+  -q|--quiet	be quiet
+  -D|--debug	print debug messages
+
+* if you want to pass mode but leave default owner, pass it as '-' or empty
+
+" );
+}
+
+sub makedir
+{
+	my ($dir, $owner, $mode, $verbose, $fixperms) = @_;
+
+	pdebug( "makedir( '%s', '%s', '%s', ... )\n", $dir, $owner, $mode );
+
+	if (-d $dir) {
+		return	if (!$fixperms);
+
+		$verbose && printf( "  fixing perms on '$dir'  ($owner, $mode)\n" );
+		$dummy && return 1;
+	} else {
+		$verbose && printf( "  creating dir '$dir'   ($owner, $mode)\n" );
+		$dummy && return 1;
+
+		system( "mkdir", $dir )
+			and die "can't create dir '$dir'\n";
+	} 
+
+	system( "chmod", $mode, $dir )
+		and die "can't chmod $mode '$dir'\n";
+	system( "chown",  $owner, $dir )
+		and die "can't chown $owner '$dir'\n";
+	return 1;
+}
+
+
+sub pdebug
+{
+	return 1	if (!$Debug);
+	printf( STDERR "D# " );
+	if ($_[0] =~ /%/) {
+		printf( STDERR @_ );
+	} else {
+		print( STDERR join( " ", @_ ), "\n" );
+	}
+	return 1;
+}

@@ -1,0 +1,39 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+. jtfunctions.sh
+
+CMD=`basename $0`
+
+usage()
+{
+	echo "usage: $CMD name" >&2
+	exit 1
+}
+
+
+# (MAIN)
+
+umask 007
+
+wiki_datapath=`jtconf wiki.datapath` || exit $?
+
+
+case $# in
+	1)	name=$1 ;;
+	*)	usage ;;
+esac
+
+moin_path="$wiki_datapath/pages/$name"
+
+[ -d $moin_path ] || {
+	echo "error: wiki page $name not found" >&2
+	exit 1
+}
+
+current=`cat $moin_path/current`
+cat "$moin_path/revisions/$current"
+
+exit 0

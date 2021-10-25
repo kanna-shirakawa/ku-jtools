@@ -1,0 +1,28 @@
+## samples definizioni wiki relative all'azienda
+##
+## == summary ==
+## || scope || system, project ||
+## || install (system) || /etc/jtools/conf.d/ ||
+## || install (project) || $PRJ/etc/conf.d/ ||
+## || sections || wiki ||
+##
+## == description ==
+##
+## Contiene le definizioni di carattere aziendale da utilizzare nella wiki:
+## 
+##  * '''main_index_name''': nome della pagine indice dei progetti
+##  * '''main_index_title''': titolo della pagina
+##  * '''copyright''': stringa di copyright
+##  * '''footer''': stringa, anche multilinea, da aggiungere in coda ad ogni pagina,
+##  tipicamente contiene un motto o una descrizione breve del progetto e il copyright
+## 
+## Essendo relative all'azienda lo scope principale e` a livello di sistema, ma puo`
+## essere ovviamente utilizzato a livello di progetto per definizioni specifiche.
+
+[wiki]
+  main_index_name	projects
+  main_index_title	MY PROJECTS
+  copyright		(c) COPYRIGHT PLACEHOLDER
+  footer		----\n\
+  			''MY PROJECTS MOTTO''<<BR>>\n\
+			''::wiki.copyright::''

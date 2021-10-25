@@ -1,0 +1,76 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+## jtfos-getconfig - fossil, gets a config value from repository
+##
+CMD=`basename $0`
+
+usage()
+{
+	echo "usage: $CMD fossil-repo key(s) ..." >&2
+	exit 1
+}
+
+get_config()
+{
+	local db=$1
+	local key=$2
+	if $f_hex
+	then
+		echo "select hex(value) from config where name = '$key';" | \
+			sqlite3 $db
+			return $?
+	else
+		echo "select value from config where name = '$key';" | \
+			sqlite3 $db
+			return $?
+	fi
+}
+
+list_settings()
+{
+	local db=$1
+	echo "select name from config;" | sqlite3 $db | sort
+}
+
+# (MAIN)
+
+
+f_hex="false"
+do_list="false"
+
+
+[ "x$1" == "x-l" -o "x$1" == "x--list" ] && {
+	do_list="true"
+	shift
+}
+[ "x$1" == "x-x" -o "x$1" == "x--hex" ] && {
+	f_hex="true"
+	shift
+}
+
+[ $# == 0 ] && usage
+
+fossil_repo="$1" ; shift
+
+[ -f "$fossil_repo" -a -r "$fossil_repo" ] || {
+	echo "fossil-repo '$fossil_repo' not found or not readable" >&2
+	exit 1
+}
+
+$do_list && {
+	list_settings $fossil_repo
+	exit $?
+}
+
+[ $# == 0 ] && usage
+
+while [ $# != 0 ]
+do
+	get_config "$fossil_repo" "$1" || exit $?
+	shift
+done
+
+exit 0

@@ -1,0 +1,462 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.8"
+CMDSTR="$CMD v.$CMDVER (2021-10-25)"
+
+set -e -u
+
+[ "$(which ku-distroenv)" = "" ] && {
+	echo "error:	ku-distroenv command not found, is package" >&2
+	echo "	ku-base (>=1.2) installed?" >&2
+	exit 1
+}
+eval $(ku-distroenv)
+
+
+usage()
+{
+	echo "
+$CMDSTR - rebuild debian package and move results to right places
+
+usage:	$CMD [options] packagename [dpkg-buildpackage options...]
+	$CMD [--movefiles]          (from within src directory)
+
+options:
+  --distro X	build for distro name X instead of default ($DISTRIB_CODENAME,
+  		taken from \$DISTRIB_CODENAME env var)
+  -l		do not build, show only parms (workdir, pkgname, etc)
+  		but preprocess control files if needed
+  --movefiles	do not build, only moves debfiles to target dirs
+  --alldistros	copy generic (_all) files to all distros (*deprecated*)
+  --nc		do not clean before build (passed as '-nc' to jtdeb-make)
+  --nomove	don't move files after build
+" >&2
+
+	[ $# != 0 ] && echo -e "\n$@\n" >&2
+	exit 1
+}
+
+
+control_file_preprocessing()
+{
+	# control files pre-processing
+	#
+	[ -d debian.in -o -d fedora.in ] && {
+		makefile=
+		for file in ku/makefile-test ku/makefile ku/Makefile
+		do
+			[ -f $file ] && {
+				makefile="-f $file"
+				break
+			}
+		done
+		make $makefile controls || exit $?
+	}
+	return 0
+}
+
+
+
+set_real_pkgname()
+{
+	local pkg=
+
+	# obtain real pkgname from debian changelog
+	#
+	set $(head -1 debian/changelog) ""
+	[ "X$1" == "X" ] && {
+		echo "error, can't obtain package name from debian/changelog" >&2
+		exit 1
+	}
+
+	pkgs=$(grep '^Package: ' debian/control | sed -e 's/Package: //')
+
+	pkgname=$1
+	pkgver=$(echo "$2" | sed -e 's/[()]//g')
+	pkgs=$(echo $pkgs)
+	buildfor="(any)"
+	[ -f ku/distros ] && buildfor=$(cat ku/distros)
+
+	eval $(jtdeb-version "$pkgver")
+	pkgfullname="${pkgname}_${pkg_fullversion}"
+
+	echo -e "
+rebuilding package: $pkgname $pkgver (from changelog)
+
+  real version:     $pkg_fullversion
+     upstream:      $pkg_up_version
+     ubuntu:        $pkg_ubuntu_version
+     our version:   $pkg_ku_ver
+     our release:   $pkg_ku_rel
+
+  packages:         $pkgs
+  build for:        $(echo $buildfor)
+  current distro:   $distro_name
+  workdir:	    $workdir
+  build options:    $Args
+"
+	sleep 2
+
+	local bld=
+	local bldok=true
+	[ "$buildfor" != "(any)" ] && {
+		bdlok=false
+		for bld in $buildfor
+		do
+			[ $bld == $distro_name ] && {
+				bldok=true
+				break
+			}
+		done
+		$bldok || {
+			echo "ERROR: this package can be built only for releases $bdlfor" >&2
+			echo "       (current release is $distro_name)" >&2
+			exit 1
+		}
+	}
+	return 0
+}
+
+
+rebuild_package()
+{
+	local stat=
+	local logfile="../${pkgname}-rebuild.log"
+
+	# rebuild the package
+	#
+	echo -e "\n  rebuilding package ...\n"
+	(
+		rm -f err.tmp
+		jtdeb-make $noclean $Args || echo $? >err.tmp
+	) 2>&1 | tee "$logfile"
+
+	[ -s err.tmp ] && {
+		stat=$(cat err.tmp)
+		echo -e "\nERROR $stat rebuilding package\n"
+		rm -f err.tmp
+		return $stat
+	}
+	return 0
+}
+
+
+move_files()
+{
+	local binfiles=
+	local genfiles=
+	local arch=
+	local alldistro=
+	local pkg=
+	local pkgs=$(dh_listpackages)
+	local out=
+	local files=
+	local file=
+	local ext=
+	local parent=$(dirname "$workdir")
+
+	set -e -u
+
+	case $(uname -m) in
+	  x86_64)	arch="amd64" ;;
+	  *)		arch="i386" ;;
+	esac
+
+
+	cd "$workdir"
+
+
+	# workdir is a symlink? so the files are created in the wrong dir
+	# (.. points to real parent, not the logical one)
+	#
+	[ -L "$workdir" ] && {
+		echo
+		echo "  symlinked workdir: $workdir"
+		echo "  moving files to:   $parent ... "
+		files=$(ls ../${pkgfullname}*.* ../${pkgname}.* ../${pkgname}_*.* ../${pkgname}-*.log 2>/dev/null || :)
+		for pkg in $pkgs
+		do
+			files="$files\n"$(ls ../${pkg}_${pkg_fullversion}_*.* 2>/dev/null || :)
+		done
+		echo
+		for file in $(echo -e "$files" | sort -u)
+		do
+			echo "    relocate $file"
+			mv $file "$parent/"
+		done
+		echo
+	}
+
+
+	cd "$parent"
+
+	files=
+	for ext in $JTDEB_REBUILD_PURGE_EXTS
+	do
+		files="$files\n"$(ls ${pkgfullname}*.$ext ${pkgname}.$ext ${pkgname}_*.$ext 2>/dev/null || :)
+		for pkg in $pkgs
+		do
+			files="$files\n"$(ls ${pkg}_${pkg_fullversion}_*.$ext 2>/dev/null || :)
+		done
+	done
+	[ "X$files" != "X" ] && {
+		for file in $(echo -e "$files" | sort -u)
+		do
+			echo "  cleaning $file"
+			rm -f $file
+		done
+		echo
+	}
+
+	$f_temp_source && {
+		echo "  cleaning $pkgname.tar.[gx]z .."
+		rm -f $pkgname.tar.[gx]z
+		echo "  cleaning $pkgname dir .."
+		rm -rf $pkgname
+	}
+
+	for pkg in $pkgs
+	do
+		out=$(ls ${pkg}_${pkg_fullversion}_${arch}.deb 2>/dev/null)
+		[ "X$out" != "X" ] && binfiles="$binfiles $out"
+		out=$(ls ${pkg}_${pkg_fullversion}_all.deb 2>/dev/null)
+		[ "X$out" != "X" ] && genfiles="$genfiles $out"
+	done
+
+	set +x
+
+	echo
+	echo "resulting files/dirs ($pkgname):"
+	[ "X$binfiles" != "X" ] && {
+		echo "--ARCH--------------------------------------------------------------------------"
+		ls -ld $binfiles
+	}
+	[ "X$genfiles" != "X" ] && {
+		echo "--ALL---------------------------------------------------------------------------"
+		ls -ld $genfiles
+	}
+	echo "--------------------------------------------------------------------------------"
+
+
+	$f_only_this_distro && {
+		binfiles="$binfiles $genfiles"
+		genfiles=
+	}
+
+	$f_move_files && {
+		# copy arch dependent packages in current slot
+		#
+		[ "X$binfiles" != "X" -a "X$binfiles" != "X " ] && {
+			echo -e "\nARCH pkgs: " $binfiles
+			dest="$PRJ/pkgs/$distro_name"
+			[ -d $dest ] || {
+				mkdir $dest || exit $?
+			}
+
+			echo "  moving arch dependent files to $dest ..."
+			mv $binfiles $dest/. || exit $?
+		}
+
+		[ "X$genfiles" != "X" ] && {
+			echo -e "\nNONBIN pkgs: " $genfiles
+
+			# if there are arch dependent files, install non-arch only
+			# to current target, else look for listed targets, or all
+			#
+			if [ "$binfiles" != "" ]
+			then
+				alldistros=$distro_name
+			else
+				if [ "$buildfor" == "(any)" ]
+				then
+					alldistros=$(ls $PRJ/pkgs)
+				else
+					alldistros=$buildfor
+				fi
+			fi
+
+			for distro in $alldistros
+			do
+				dest=$PRJ/pkgs/$distro
+				[ -d $dest ] && {
+					echo "  copying nonbin files to $dest ..."
+					cp -af $genfiles $dest/. || exit $?
+				}
+			done
+			rm -f $genfiles
+		} # $genfiles != ""
+	} # $f_move_files
+
+	for distro in $(ls $PRJ/pkgs)
+	do
+		jtdeb-purge-pkgs -x $distro
+	done
+
+
+	echo "
+files/dirs left:
+--------------------------------------------------------------------------------
+$(ls -ldG *.deb *.dsc *.changes *.tar.[gx]z 2>/dev/null)
+--------------------------------------------------------------------------------
+"
+	return 0
+}
+
+
+cleanup()
+{
+	$f_clean || return 0
+
+	trap "" 1 2 3 EXIT ERR
+	rm -f err.tmp
+	[ "X$pkgname" != "X" ] && {
+		cd $workdir
+		echo -en "  running jtdeb-clean ... "
+		jtdeb-clean >../${pkgname}-rebuild-clean.log 2>&1
+		echo "ok"
+	}
+	trap 1 2 3 EXIT ERR
+	return 0
+}
+
+
+
+
+
+# (MAIN)
+
+f_only_move_files=false
+pkgname=
+noclean=""
+f_clean=true
+f_only_show_parms=false
+f_only_this_distro=true
+f_move_files=true
+f_temp_source=false
+distro_name=$DISTRIB_CODENAME
+Args=
+
+# XXX	this is only suitable in klabs envinronment, we don't use such files
+#	to override set the env var empty
+#
+JTDEB_REBUILD_PURGE_EXTS=${JTDEB_REBUILD_PURGE_EXTS:-"dsc changes"}
+
+echo -e "\n$CMDSTR args: $@\n"
+
+while [ $# != 0 ]
+do
+  case $1 in
+    -l)			f_only_show_parms=true ;;
+    --movefiles)	f_only_move_files=true ;;
+    --alldistros)	f_only_this_distro=false ;;
+    --nc)		f_clean=false; noclean="-nc" ;;
+    -nc)		f_clean=false; noclean="-nc" ;;	# compatibility with dpkg-buildpackage
+    --nomove)		f_move_files=false ;;
+    --distro)		shift
+    			[ $# = 0 ] && usage "error: --distro needs an argument"
+			distro_name=$1
+			;;
+    "")			break ;;
+    -*)			[ "X$pkgname" = "X" ] && usage
+    			;;
+    *)			pkgname=$1
+    			break
+			;;
+  esac
+  shift
+done
+Args="$@"
+
+
+if [ "X$pkgname" == "X" ]
+then
+	# search upward for main package dir
+	#
+	pkgname=
+	for dir in 1 2 3
+	do
+		[ -d "debian" ] && {
+			pkgname=$(pwd)
+			break
+		}
+		cd ..
+	done
+  	[ "$pkgname" == "" ] && {
+		echo "error, can't find main package dir (debian subdir not found)" >&2
+		exit 1
+	}
+
+	case $pkgname in
+	  $PRJ/src/*) ;;
+	  *) echo "warning: $(pwd) is not in \$PRJ/src tree" ;;
+	esac
+	pkgname=$(basename $pkgname)
+	workdir=$(pwd)
+else
+	# sanity checks
+	#
+	file=$((cd $PRJ/sources ; ls ${pkgname}_* 2>/dev/null || :))
+	if [ X"$file" != X ]
+	then
+		set $(echo "$file" | wc -l)
+	else
+		set 0
+	fi
+	case $1 in
+   	  0)	echo "error: no package found with this name in $PRJ/sources" >&2
+   		exit 1
+		;;
+   	  1)	echo "using $file as sourcefile"
+  		;;
+   	  *)	echo "error: multiple files found in $PRJ/sources:" >&2
+   		echo "$file" >&2
+		exit 1
+		;;
+	esac
+	workdir=$(tar tf $PRJ/sources/$file | head -1 | sed -e 's#/.*##')
+	workdir=$PRJ/src/$workdir
+
+	# extract from sourcefile
+	#
+	if [ -d $workdir ]
+	then
+		echo " $CMD WARNING! using existing dir $workdir to build"
+		echo " $CMD remove this directory if you want a clean remake"
+		echo
+		sleep 2
+	else
+		echo "  $CMD extracting files to $PRJ/src ..."
+		cd $PRJ/src || exit $?
+		tar xfp $PRJ/sources/$file || exit $?
+		f_temp_source=true
+	fi
+fi
+
+echo "
+$CMD PKGNAME: $pkgname
+$CMD WORKDIR: $workdir
+"
+
+
+set -u
+
+cd $workdir || exit $?
+
+
+control_file_preprocessing || exit $?
+set_real_pkgname || exit $?
+
+$f_only_show_parms && exit 0
+
+$f_only_move_files || {
+	rebuild_package || exit $?
+}
+
+move_files || exit $?
+cleanup
+
+exit 0

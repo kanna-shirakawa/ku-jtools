@@ -1,0 +1,17 @@
+# $PRJ/etc/profile.$LOGNAME sample file
+#
+# for a custom project profile, copy this file to "profile.yourlogname"
+# and modify it
+#
+echo "
+	this is the custom project profile for:
+
+	LOGNAME	$LOGNAME
+	PROJECT	$PRJNAME ($PRJ)
+"
+
+export MYDIR=$PRJ/mydir
+[ -d $MYDIR ] && cd $MYDIR
+
+
+# do not exit, this file will be included (sourced)

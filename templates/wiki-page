@@ -1,0 +1,17 @@
+#format wiki
+#language it
+#pragma section-numbers on
+
+::wiki.no_mod_warning::
+
+= ::desc:: =
+''::filename:: (::section::)''
+
+<<TableOfContents(4)>>
+
+::env.BUFFER_BODY::
+
+----
+<<PageComment2>>
+
+::wiki.footer::

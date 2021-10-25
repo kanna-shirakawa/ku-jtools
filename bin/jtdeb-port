@@ -1,0 +1,325 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.6"
+CMDSTR="$CMD v$CMDVER (2020-10-25)"
+
+TFILE="etc/hostaliases"
+
+ERRSTR=""
+ERRORS=0
+
+usage()
+{
+	echo -e "
+this is $CMDSTR - rebuild deb packages on target system(s)
+
+usage: $CMD [options] sourcefile(s) [jtdeb-rebuild options ...]
+
+options:
+  -D|--debug)
+  	show debug messages, and pass this option to subsequent commands
+
+  -t|--target list
+  	arguments is a comma separated list of targets, can be hostnames,
+  	aliases (see \$PRJ/$TFILE), target hosts needs a \$PRJ clone,
+	nfs mounted or mirrored; this command is executed on remote
+	targets using 'jtcj'
+
+	target names can be target/distroname, to overrides default distro
+	name on the target system
+
+  --distro name
+  	overrides default distro name (see $DISTRIB_CODENAME or lsb_release);
+	this option is incompatible with --target opt, use alternate form
+	if you need targets list
+
+  -j|--prj prjname
+  	when target list is used, remotely runs under this project (default
+	is same current project name; note that project name is used, the
+	target hosts can resolve this to different dirs than original)
+
+  sourcefile(s)
+  	can be tar.gz files or directories under src
+
+" >&2
+	[ $# != 0 ] && echo -e "\n$@\n" >&2
+	exit 1
+}
+
+cleanup()
+{
+	rm -rf $tempdir
+}
+
+
+
+resolv_hostalias()
+{
+	set -e
+	local host=$1
+	local tfile="$PRJ/$TFILE"
+	local result=
+
+	result=$(sed -e 's/#.*//' -e 's/^[ ,	]*$//' -e '/^$/d' "$tfile" | 
+		egrep "[ ,	]$host[ ,	]|[ ,	]$host$")
+
+  	[ "$result" = "" ] && {
+		echo "error: can't resolve host '$host'" >&2
+		return 1
+	}
+	[ $(echo "$result" | wc -l) != 1 ] && {
+  		echo "error: alias '$host' matches multiple hosts" >&2
+		return 1
+	}
+	echo "$result" | sed -e 's/[ ,	].*//'
+}
+
+
+search_file()
+{
+	local file=$1
+	local dir=
+	local out=
+	local ifs=$IFS
+
+	IFS=$reduced_ifs
+   	for dir in $(echo -e "$searchdirs")
+   	do
+		[ -d "$dir" ] || {
+			echo -e " search_file() warn: dir '$dir' not found (system=$(uname -n))" >&2
+			continue
+		}
+
+		# NAME directory
+		[ -d "$dir/$1" ]	&& { out=$dir/$1; break; }
+		# NAME-VERSION directory
+		out=$( (cd $dir; ls -d ${1}-[0-9]* 2>/dev/null) | fgrep -v '.tar.gz' | tail -1)
+		[ "X$out" != "X" -a -d "$dir/$out" ] && { out=$dir/$out; break; }
+
+		# NAME tarfile 
+		[ -f "$dir/$1.tar.gz" ]	&& { out=$dir/$1.tar.gz; break; }
+		# NAME_VERSION tarfile
+		out=$( (cd $dir ; ls -d ${1}_[0-9]*.tar.gz 2>/dev/null) | tail -1)
+		[ "X$out" != "X" -a -f "$dir/$out" ] && { out=$dir/$out ; break; }
+	done
+	IFS=$ifs
+
+	[ "X$out" = "X" ] && return 1
+	echo "$out"
+	return 0
+}
+
+
+rec_error()
+{
+	ERRSTR="$ERRSTR\n$*"
+	ERRORS=$(expr $ERRORS + 1)
+	echo -e "\nERROR: $*\n"
+	return 0
+}
+
+
+
+# (MAIN)
+
+. /etc/default/kusa-paths
+
+sources=
+targets=
+prjname=
+distro=
+distro_opt=
+here=$(pwd)
+parent=$( (cd ..; pwd) )
+searchdirs="
+	$parent
+	$PRJ/src
+	$PRJ/sources
+"
+tempdir=$(mktemp -d $KUSA_PATH_TMPDIR/$CMD-XXXXXXX) || exit $?
+reduced_ifs="
+	"
+
+DEBUG=${DEBUG:-false}
+
+trap "echo '*INTR*'; cleanup; exit 127" 1 2 3
+trap "cleanup" EXIT
+
+
+echo -e "\n== $CMDSTR args: $*\n"
+
+
+while [ $# != 0 ]
+do
+  case $1 in
+   -h|--help)	usage ;;
+   -D|--debug)	DEBUG=true ;;
+   -j|--prj)	shift
+   		[ $# = 0 ] && usage
+   		prjname=$1
+		;;
+   -t|--target) shift
+   		[ $# = 0 ] && usage "error: --target needs a target list"
+		for host in $(echo $1 | tr ',' ' ')
+		do
+			alias=$(resolv_hostalias $host 2>/dev/null)
+			[ "$alias" != "" ] && {
+				echo " using '$alias' as host for '$host'"
+				host=$alias
+			}
+			targets="$targets $host"
+		done
+		;;
+   --distro)	shift
+   		[ $# = 0 ] && usage "error: --distro needs an argument"
+		distro=$1
+		distro_opt="--distro $1"
+		;;
+   --)		break ;;
+   -*)		[ "X$sources" = "X" ] && usage "unkown option: $1"
+   		break ;;
+   "")		usage ;;
+   *)		sources="$sources $1" ;;
+  esac
+  shift
+done
+
+[ "X$sources" = "X" ] && usage "must supply sourcefile name(s)"
+[ "$targets" != "" -a "$distro" != "" ] && usage "cannot use both --target and --distro opts"
+
+[ -d "$PRJ/pkgs" ] || {
+	echo -e "\n$CMD ERROR: target directory '\$PRJ/pkgs' not found" >&2
+	echo -e "  wrong project?\n" >&2
+	exit 1
+}
+
+case $DEBUG in
+ true)	dbg_flag="--debug" ;;
+ *)	DEBUG=false; dbg_flag="" ;;
+esac
+
+# if using a target list, remotes launch myself to targets
+#
+[ "$targets" != "" ] && {
+	sources=$(echo -e $sources)
+	for target in $targets
+	do
+		distro=
+		distro_opt=
+		if echo "$target" | grep -q '/'
+		then
+			distro=$(echo $target | cut -d'/' -f2)
+			target=$(echo $target | cut -d'/' -f1)
+			distro_opt="--distro $distro"
+			echo -e "\nTARGET SYSTEM: $target ($distro_opt)\n"
+		else
+			echo -e "\nTARGET SYSTEM: $target\n"
+		fi
+		ssh $target jtreset jtcj $dbg_flag --batch --cd "$here" ${prjname:-$PRJNAME} \
+			"$CMD $sources $distro_opt $@" || exit $?
+	done
+	exit 0
+}
+
+[ -z "$prjname" ] || {
+	exec jtreset jtcj $dbg_flag --batch --cd "$here" $prjname "$CMD $sources $@"
+}
+
+errors=0
+srcfiles=
+for file in $sources
+do
+	srcfile=$(search_file "$file") || usage "sourcefile '$file' not found in\n$searchdirs"
+	srcfiles="$srcfiles\n$srcfile"
+done
+
+logdir=$PRJ/logs/$(uname -n | sed -e 's/\..*//')
+[ -d $logdir ] || mkdir -p $logdir
+
+
+for srcfile in $(echo -e "$srcfiles")
+do
+	pkgname=$(basename $srcfile | sed -e 's/_.*//' -e 's/-[0-9].*//')
+
+	cd $tempdir
+
+	case $srcfile in
+	  *.tar.gz)
+	  	dir=$(tar tfz $srcfile | head -1 | sed -e 's#/.*##')
+		echo
+		echo "PKG:     $pkgname"
+		echo "source:  (TARFILE) $srcfile"
+		echo "workdir: $tempdir/$dir"
+		echo
+	  	[ -d $dir ] && {
+			echo "error, dir $tempdir/$dir exists, cannot overwrite" >&2
+			errors=$(expr $errors + 1)
+			continue
+		}
+		echo -n "  extracting tarfile ... "
+	  	tar xfpz $srcfile	|| { rec_error $pkgname "tar x $srcfile"; continue; }
+		echo "ok"
+	  	cd $dir			|| { rec_error $pkgname "dir not found: $dir"; continue; }
+		;;
+	   *)
+		dir=$pkgname
+
+		echo "PKG:     $pkgname"
+		echo "source:  (DIR) $srcfile"
+		echo "workdir: $tempdir/$dir"
+		echo
+	  	[ -d $dir ] && {
+			echo "error, dir $tempdir/$dir exists, cannot overwrite" >&2
+			errors=$(expr $errors + 1)
+			continue
+		}
+
+	   	echo -n "  copying sourcedir to tempdir ... "
+		mirror -f --all $srcfile $tempdir/$pkgname --exclude=".git*" >$tempdir/mirror.log 2>&1 || {
+			rec_error $pkgname "mirror to tempdir"
+			cat $tempdir/mirror.log
+			continue
+		}
+		echo "ok"
+	  	cd $dir			|| { rec_error $pkgname "dir not found: $dir"; continue; }
+		;;
+	esac
+
+	echo "  rebuilding ... "
+	good=true
+	jtdeb-rebuild $dbg_flag $distro_opt "$@" || {
+		rec_error $pkgname "rebuild failed"
+		good=false
+	}
+
+	echo
+	parent=$(pwd); parent=$(dirname "$parent")
+	for logfile in rebuild rebuild-clean
+	do
+		logfile="$parent/${pkgname}-$logfile.log"
+		[ -f "$logfile" ] && {
+			mv "$logfile" "$logdir/"
+			logfile=$(basename "$logfile")
+			echo "BUILD LOG: $logdir/$logfile"
+		}
+	done
+	echo
+
+	$good || continue
+
+	cd $tempdir
+	rm -rf $dir
+done
+
+[ $ERRORS = 0 ] || {
+	echo -e "\nTOTAL ERRORS: $ERRORS\n$ERRSTR\n" >&2
+	exit 1
+}
+
+echo -e "\n$CMD exit 0 (ok)\n"
+
+exit 0

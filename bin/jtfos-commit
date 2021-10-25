@@ -1,0 +1,18 @@
+#!/bin/bash
+
+CMD=`basename $0`
+
+usage()
+{
+	echo -e "\nusage: $CMD fossil commit parms\n" >&2
+	fossil help commit >&2
+	exit 1
+}
+
+
+# (MAIN)
+
+jtscm-save-mtimes || exit $?
+fossil add $PRJ/.prj_mtimes
+
+exec fossil commit "$@"

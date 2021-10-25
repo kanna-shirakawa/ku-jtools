@@ -1,0 +1,458 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.5"
+CMDSTR="$CMD v$CMDVER (2021-10-23)"
+
+
+set -e -u
+
+usage()
+{
+	echo "
+this is $CMDSTR - manage/query pkg sources infos database
+
+usage:	1) $CMD [options] infotype pkgname
+	2) $CMD [-f|--force] update [sourcedir]
+
+options:
+  --arch X	searches only arch=X
+  --distro X	searches only distro name=X
+  --deb		pkgname is full debian package filename (.deb)
+
+infotype:
+  source	full source (tarball) pathname
+  sourcename	source name (without path)
+  packages	list of packages that will be built from source
+  pkgver	same of 'packages' but with version
+  pkgfile	same of 'packages' but full package (.deb) filename
+  pkgname	source package name
+
+sourcedir: now is $sourcedir
+pkgname: you can use regular expressions (egrep style)
+
+">&2
+	exit 127
+}
+
+cleanup()
+{
+	[ "$tmpdir" != "" -a -d "$tmpdir" ] && rm -rf $tmpdir || :
+}
+
+search_source()
+{
+	local pkg=$1
+	local src=
+	local files=`(cd $PRJ/source ; ls ${pkg}_*.tar.gz 2>/dev/null | tail -1)`
+
+	[ "$files" = "" ] && return 1
+	echo "$files"
+	return 0
+}
+
+cache_update()
+{
+	local dir=$1
+	local new=
+	local file=
+	local must_rebuild=false
+	local reason=
+	local temp=
+	local srcdir=
+	local workdir=
+	local pkg=
+	local pkgname=
+	local distros=
+	local cachetime=
+	local dirtime=
+
+	[ -d "$cachedir" ] || {
+		echo " creating dir '$cache'"
+		mkdir $cache || return $?
+	}
+
+
+	if $f_force
+	then
+		must_rebuild=true
+		reason="(forced)"
+		new=`(cd $dir ; ls *.tar.gz)`
+	else
+		if [ -f $cachefile ]
+		then
+			[ -f $dir/distros ] && {
+				new=`(cd $dir ; find distros -newer $cachefile)`
+				[ "$new" != "" ] && {
+					must_rebuild=true
+					reason="metafile changed (src/distros)" 
+					new=`(cd $dir ; ls *.tar.gz)`
+					rm -f $cachefile
+				}
+			}
+
+			$must_rebuild || {
+				new=`(cd $dir ; find distros *.tar.gz -newer $cachefile 2>/dev/null || :)`
+
+				if [ "$new" = "" ]
+				then
+					cachetime=`stat --format='%Y' $cachefile`
+					dirtime=`stat --format='%Y' $dir`
+					if [ $dirtime -gt $cachetime ]
+					then
+						must_rebuild=true
+						reason="cachedir changed (cache=$cachetime dir=$dirtime)"
+						new=`(cd $dir ; ls *.tar.gz)`
+						rm -f $cachefile
+					else
+						echo " up to date" >&2
+					fi
+				else
+					set `echo "$new" | wc -l`
+					must_rebuild=true
+					reason="$1 new file(s)"
+				fi
+			}
+		else
+			new=`(cd $dir ; ls *.tar.gz)`
+			must_rebuild=true
+			reason="empty"
+		fi
+
+	fi # f_force
+
+	$must_rebuild && {
+		echo " rebuild $cachefile: $reason"
+
+		# 2021-09-18
+		# - works on file copy, updates only at end
+		if [ -f $cachefile ]
+		then
+			cp $cachefile $cachefile.new
+		else
+			:>$cachefile.new
+		fi
+
+		for file in $new
+		do
+			case $file in
+			  *.tar.gz) ;;
+			  *) continue ;;
+			esac
+
+			pkgname=`echo "$file" | sed -e 's/_.*//'`
+			printf "  %-26s " $pkgname
+
+			srcdir=`tar tfz $dir/$file | head -1 | sed -e 's#/.*##'` 
+			distros=
+			[ "$srcdir" = "" ] && exit 1
+			printf " %-30s " $srcdir
+
+			if [ -d $PRJ/src/$srcdir ]
+			then
+				echo -n "SRCDIR  "
+				workdir="$PRJ/src/$srcdir"
+				srcdir=$workdir
+			else
+				echo -n "TARBALL "
+				(cd $tmpdir; rm -rf $srcdir; tar xfpz $dir/$file) || return $?
+				workdir="$tmpdir/$srcdir"
+				srcdir="-"
+			fi
+			pkgs=`list_pkgs $workdir`
+
+			[ -f $workdir/ku/distros ] && distros=`cat $workdir/ku/distros`
+			[ "$distros" = "" -a -f $sourcedir/distros ] && {
+				distros=`grep "^$pkgname[ ,	]" $sourcedir/distros |
+					sed -e "s/^$pkgname[ ,	][ ,	]*//"`
+			}
+			[ "$distros" = "" ] && distros="-"
+			echo "$distros"
+
+			# 2021-09-18
+			# - old entries must be removeed
+			# - works on file copy, updates only at end
+			grep -v "^$pkgname " $cachefile.new >$cachefile.tmp || :
+			mv $cachefile.tmp $cachefile.new
+			echo "$pkgs" | while read pkg arch ver
+			do
+				echo "   pkg: $arch $pkg"
+				echo "$pkgname $pkg $arch $ver $srcdir $dir/$file $distros" >>$cachefile.new
+			done
+		done
+
+		# 2021-09-18
+		# - works on file copy, updates only at end
+		if [ -f $cachefile ]
+		then
+			set `wc -l $cachefile`
+			echo " $cachefile before: $1 entries"
+			rm -f $cachefile.old
+			mv $cachefile $cachefile.old
+		else
+			echo " $cachefile before: (none)"
+		fi
+		sort -u -o $cachefile $cachefile.new
+
+		set `wc -l $cachefile`
+		echo " $cachefile after:  $1 entries"
+	}
+
+	return 0
+}
+
+list_pkgs()
+{
+	local dir=$1
+	local tag=
+	local val=
+	local pkg=
+	local trush=
+	local ver=
+	local distros=
+	local makefile=
+	local stat=
+
+	cd $dir
+
+	[ -d ku -o -d debian.in ] && {
+		for makefile in ku/makefile ku/Makefile Makefile makefile
+		do
+			[ -f $makefile ] && break
+		done
+		make -f $makefile controls >$tmpdir/log 2>&1 || {
+			stat=$?
+			echo -e "\nerror running 'make -f $makefile controls' in '$dir'\n" >&2
+			cat $tmpdir/log
+			return $stat
+		}
+	}
+
+	ver=`head -1 debian/changelog | cut -d' ' -f2 | sed -e 's/[()]//g'`
+
+	cat debian/control | while read tag val trush
+	do
+		case $tag in
+		  Package:)
+		  	pkg=$val
+			;;
+		  XC-*)		# ignore udeb packages
+			pkg=
+		  	;;
+		  Architecture:)
+			[ "$pkg" != "" ] && echo "$pkg $val $ver $distros"
+			pkg=
+			;;
+		esac
+	done
+}
+
+get_sourcedir()
+{
+	local pkg=$1
+	local dir=
+	local cache=$PRJ/cache/sourcedirs
+
+	grep "^$pkg$" $cache 2>/dev/null
+}
+
+select_and_print()
+{
+    	local pkgname=$1
+	local pkg=$2
+	local arch=$3
+	local ver=$4
+	local srcdir=$5
+	local srcfile=$6
+	local distros=$7
+
+	case $want_arch in
+	  "")	;;
+	  any)	[ "$arch" = "all" ]		&& return 1 ;;
+	  all)	[ "$arch" != "$want_arch" ]	&& return 1 ;;
+	  *)	[ "$arch" != "any" -a "$arch" != "$want_arch" ]	&& return 1 ;;
+	esac
+
+	[ "$want_distro" != "" -a "$distros" != "-" ] && {
+  		echo "$distros" | grep -q $want_distro || return 1
+	}
+
+	ver=`echo $ver | sed -e 's/.*://'`
+
+	case $infotype in
+    	  src|source)		echo "$srcfile" ;;
+    	  srcname|sourcename)	basename "$srcfile" ;;
+    	  pkgs|packages)	echo "$pkg" ;;
+    	  pkgver)		echo "${pkg}_$ver" ;;
+	  pkgname)		echo "$pkgname" ;;
+    	  pkgfile)
+		if [ "$arch" = "any" ]
+		then
+			if [ "$want_arch" != "" -a "$want_arch" != "any" ]
+			then
+				archs=$want_arch
+			else
+				archs="i386 amd64"
+			fi
+		else
+			archs=$arch
+		fi
+		for arch in $archs
+		do
+			echo "${pkg}_${ver}_$arch.deb"
+		done
+		;;
+	esac
+	return 0
+}
+
+# (MAIN)
+
+tmpdir=`mktemp -d /tmp/$CMD-XXXXXX`
+cachedir="$PRJ/cache"
+cachefile="$cachedir/srcinfos"
+
+# modes
+mode=
+
+# flags
+f_force=false
+
+# parms
+pkgname=
+want_arch=
+want_distro=
+infotype=
+sourcedir="$PRJ/sources"
+search=
+f_search_deb=false
+
+while [ $# != 0 ]
+do
+  case $1 in
+    src|source|srcname|sourcename|pkgs|packages|pkgver|pkgfile|pkgname)
+    	[ "$mode" != "" ] && usage
+	mode="infos"
+  	infotype=$1
+	;;
+    -u|update)
+    	[ "$mode" != "" ] && usage
+	mode="update"
+	;;
+    --arch)
+	shift
+    	[ "$want_arch" != "" ] && usage
+	[ $# = 0 ] && usage
+	case $1 in
+	  i386|amd64|all|any) ;;
+	  *)	echo " wrong arch, must be one of: i386, amd64, all, any" >&2
+	  	exit 1
+		;;
+	esac
+	want_arch=$1
+	;;
+    --distro)
+	shift
+    	[ "$want_distro" != "" ] && usage
+	[ $# = 0 ] && usage
+	want_distro=$1
+	;;
+    --deb)		f_search_deb=true ;;
+    -f|--force)		f_force=true ;;
+    -*|"")		usage ;;
+    *)			break ;;
+  esac
+  shift
+done
+
+trap 'echo -e "\n*INTR*\n"; exit 127' 1 2 3
+trap 'echo -e "\nunexpected error $? at $LINENO\n"' ERR
+trap 'cleanup' EXIT
+
+case $mode in
+  update)
+	[ "$want_arch" != "" ] && usage
+	[ "$want_distro" != "" ] && usage
+	[ $# = 1 ] && {
+		sourcedir=$1
+		shift
+	}
+	[ $# != 0 ] && usage
+	cache_update $sourcedir
+	stat=$?
+	cleanup
+	exit $stat
+	;;
+esac
+
+
+# default mode: infos
+#
+[ $# != 1 ] && usage
+$f_force && usage
+[ "$infotype" = "" ] && usage
+
+search=$1
+stat=
+
+case `uname -m` in
+  x86_64)	osarch=amd64 ;;
+  *)		osarch=i386 ;;
+esac
+
+# search by debfilename
+#
+if $f_search_deb
+then
+    cat $cachefile | while read pkgname pkg arch ver srcdir srcfile distros
+    do
+	[ "$arch" = "any" ] && {
+		if [ "$want_arch" = "" ]
+		then
+			arch=$osarch
+		else
+			arch=$want_arch
+		fi
+	}
+
+	ver=`echo $ver | sed -e 's/.*://'`
+	fulldebname="${pkg}_${ver}_$arch.deb"
+
+	[ $fulldebname != $search ] && continue
+
+	select_and_print "$pkgname" "$pkg" "$arch" "$ver" "$srcdir" "$srcfile" "$distros"
+    done | sort -u
+
+    exit 0
+
+fi # $f_search_deb
+
+
+# search by pkgname
+#
+out=$(
+  egrep "^$search " $cachefile | while read pkgname pkg arch ver srcdir srcfile distros
+  do
+	select_and_print "$pkgname" "$pkg" "$arch" "$ver" "$srcdir" "$srcfile" "$distros"
+  done | sort -u
+)
+
+[ "$out" != "" ] && {
+	echo "$out"
+	exit 0
+}
+
+
+# search by pkg
+#
+cat $cachefile | while read pkgname pkg arch ver srcdir srcfile distros
+do
+	echo "$pkg" | grep -q "^${search}$" || continue
+
+	select_and_print "$pkgname" "$pkg" "$arch" "$ver" "$srcdir" "$srcfile" "$distros"
+done | sort -u
+
+exit 0

@@ -1,0 +1,25 @@
+COPYRIGHT INFOS
+
+  The original idea of such tools, mainly a way to switch
+  environments based on structured filesystems and defines, was
+  built around 1982 in Metodo srl, Modena, Italy
+
+  The project of "tools for projects" was branched various times,
+  and in different languages too, the original idea, written in
+  plain shell, is still maintained from one of the original
+  authors, Lorenzo Canovi <lorenzo@kubiclabs.com>.
+
+  Licensed under LGPL v.2, see /usr/share/common-licenses/LGPL
+
+
+  (c) 2021 KUBiC Labs, Lorenzo Canovi <packager@kubiclabs.com>
+  (c) 2014 Allblue SA, KUBiC Labs (IT Dept) <packager@kubiclabs.com>
+  (c) 2001-2013 Lorenzo Canovi, KUBiC Labs
+  (c) 1982-2000 Lorenzo Canovi, Metodo srl (MO, Italy)
+
+CONTRIBUTORS
+
+  (c) 2008-2011 contributions from Theodora Arcadica Stichting
+  (Amsterdam, NL), branch dropped (currently unmaintaned)
+
+

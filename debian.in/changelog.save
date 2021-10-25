@@ -1,0 +1,66 @@
+ku-jtools (1.0-kl6-2) unstable; urgency=low
+
+  * fix: bin/jtcj, now search for /usr/lib/ku-base/bashrc if none
+    found in /etc
+
+ -- KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>  Tue, 23 Oct 2012 10:11:46 +0200
+
+ku-jtools (1.0-kl6-1) unstable; urgency=low
+
+  * mod: changed references from kl-base -> ku-base
+  * fix: install-functions.sh, chown error in make_control_files()
+  * new: bin/jtupdate-standards, to auto update ku build standard files
+
+ -- KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>  Mon, 22 Oct 2012 20:01:29 +0200
+
+ku-jtools (1.0-kl6) unstable; urgency=low
+
+  * rename package from kl-jtools to ku-jtools
+  * fix: jtcj, improved parsing when using command (now uses all parms
+    after prjname as command, not only the first one)
+  * mod: moved install helpers (install, install-functions.sh, install.sh)
+    into subdir "ku"
+  * mod: jtdeb-rebuild now search for "ku/makefile-test", "ku/makefile" and
+    "ku/Makefile" to preprocess .in files, instead of Makefile, so you can
+    patch original packages maintaining the pristine structure unmodified;
+    note that jtdeb-make still uses Makefile (calls dpkg-rebuildpackage), so
+    you cannot use ku/Makefile to install things
+  * new: copy of install helpers in /usr/lib/jtools/install dir
+
+ -- KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>  Mon, 22 Oct 2012 17:30:40 +0200
+
+kl-jtools (1.0-kl5) unstable; urgency=low
+
+  * new: tools for scm (fossil) management
+  * add: jtfos-* and jtscm-* commands
+
+ -- KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>  Fri, 12 Oct 2012 15:34:46 +0200
+
+kl-jtools (1.0-kl4) unstable; urgency=low
+
+  * mod: jtdir, added support for fossil scm (and --fossil option)
+  * fix: jtdir, --bazaar check was flawed
+  * mod: repackaged for multi distro support (debian, fedora)
+  * mod: jtdeb-rebuild, debian_control -> control
+
+ -- KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>  Thu, 13 Sep 2012 15:18:50 +0200
+
+kl-jtools (1.0-kl3) unstable; urgency=low
+
+  * mod: jtcj, added parm --batch
+
+ -- KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>  Sun, 01 Jul 2012 16:59:46 +0200
+
+kl-jtools (1.0-kl2) unstable; urgency=low
+
+  * fix: jtrepo-update, fixed old packages purge (was jammed when same
+    package with different arch was present)
+
+ -- KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>  Fri, 25 May 2012 10:53:51 +0200
+
+kl-jtools (1.0-kl1) unstable; urgency=low
+
+  * first packaging
+
+ -- KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>  Tue, 15 Nov 2011 17:37:28 +0100
+

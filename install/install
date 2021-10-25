@@ -1,0 +1,29 @@
+:TOOLKIT	sample-package
+:VERSION	1.0
+:RELEASE	xx0
+:SIGNATURE	$VERSION-$RELEASE (2012/10)
+:description	KUBiC Labs sample-package
+
+:maintainer	KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>
+:homepage	http://www.kubiclabs.com/trac-klpkgs
+:copy1		maintainer: $maintainer
+:copy2		for copyright see /usr/share/doc/$TOOLKIT/copyright
+
+:dir		$bindir
+:dir		$libdir
+:dir		$libdir/templates
+:dir		$confdir
+:dir		$confdir/conf.d
+:dir		$docdir
+
+:default_owner	root:root
+:default_mode	664
+
+conf.d/*	$confdir/conf.d/
+docs/*		$docdir/
+templates/*	$libdir/templates/
+
+:default_mode	755
+
+bin/*		$bindir/
+lib/*		$libdir/

@@ -1,0 +1,107 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+. jtfunctions.sh
+
+CMD=`basename $0`
+
+usage()
+{
+	echo "usage: $CMD name {inputfile | -}" >&2
+	exit 1
+}
+
+
+# timestamp as used by moin moin edit-log file
+#
+# FIXME invece di usare funzioni per localtime, tiro indietro
+# di un'ora fissa il time per l'ora legale, correggere pls
+#
+#now=`perl -e 'print (time() - 3600) . "\n";'`
+now=`perl -e 'print time() . "\n";'`
+now="${now}000000"
+
+
+
+# (MAIN)
+
+umask 007
+
+_jt_set_vars \
+	wiki.datapath \
+	wiki.bot_id \
+	|| exit $?
+
+
+case $# in
+	1)	name=$1; file="-" ;;
+	2)	name=$1; file=$2 ;;
+	*)	usage ;;
+esac
+filedes="$file"
+[ X"$file" == X- ] && filedes="(stdin)"
+
+_jt_valid_moin_name "$name" || {
+	echo "error: invalid moin page name '$name'" >&2
+	exit 1
+}
+
+[ -d $wiki_datapath ] || {
+	echo "error: wiki datapath '$wiki_datapath' not existent" >&2
+	exit 1
+}
+
+[ X"$file" == X- ] && {
+	tmp=/tmp/tmp.$$
+	cat >$tmp
+	file=$tmp
+}
+
+[ -f "$file" -a -s "$file" ] || {
+	echo "error: file '$filedes' not found or empty" >&2
+	exit 1
+}
+
+pagename=`_jt_normalize_moin_name $name`
+
+moin_path="$wiki_datapath/pages/$pagename"
+
+parsed=/tmp/tmp-parsed.$$
+jtconf-parse "$file" >$parsed || exit $?
+
+
+# new page?
+if [ ! -d $moin_path ]
+then
+	number="00000001"
+	action="SAVENEW"
+	comment="created by $CMD"
+	mkdir "$moin_path"
+	mkdir "$moin_path/cache"
+	mkdir "$moin_path/revisions"
+	echo "  create wiki page: '$name'" >&2
+else
+	number=`cat "$moin_path/current"`
+
+	cmp "$moin_path/revisions/$number" "$parsed" 2>&1 >/dev/null && {
+		echo "  page up to date:  '$name'" >&2
+		rm -f $tmp $parsed
+		exit 0
+	}
+	number=`expr $number + 1`
+	number=`printf "%08d" $number`
+	action="SAVE"
+	comment="updated by $CMD"
+	echo "  update $number:  '$name'" >&2
+fi
+
+
+cat "$parsed" > "$moin_path/revisions/$number"
+echo "$number" >"$moin_path/current"
+echo -e "$now\t$number\t$action\t$pagename\t127.0.0.1\tlocalhost\t$wiki_bot_id\t\t$comment" \
+	>>"$moin_path/edit-log"
+
+rm -f $parsed $tmp
+exit 0

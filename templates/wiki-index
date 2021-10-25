@@ -1,0 +1,17 @@
+## ::wiki.no_mod_warning::
+
+= project: ::env.PRJNAME:: - ::env.PRJDESC:: =
+----
+ || version || ::env.PRJVER:: ||
+ || bazaar version || ::env.PRJ_BZRVER:: ||
+ || bazaar date || ::env.PRJ_BZRDATE:: ||
+----
+
+::env.PRJ_INFO::
+
+::env.BUFFER_BODY::
+
+----
+<<PageComment2>>
+
+::wiki.footer::

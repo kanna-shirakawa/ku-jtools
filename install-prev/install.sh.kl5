@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# KL package install file
+# based on template 1.1 (2011/11)
+
+set -e
+
+. ./install-functions.sh
+
+[ "x$1" == "xdebian_control" ] && {
+	if [ -d debian.in ]
+	then
+		echo "pre-processing debian control files ..." >&2
+		for file in `ls debian.in`
+		do
+			installfile "debian.in/$file" debian/ $LOGNAME "" || exit $?
+		done
+	else
+		echo " no 'debian.in' dir found, debian_control install ignored" >&2
+	fi
+	exit 0
+}
+
+
+[ x"$DESTDIR" == x ] && {
+	echo -e "
+	error, you must define \$DESTDIR
+	eg: make install DESTDIR=/tmp/abcd
+	" >&2
+	exit 1
+}
+
+install_files
+
+# add custom tasks here
+

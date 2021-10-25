@@ -1,0 +1,139 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+#
+# explodes version to components
+#
+# eg: package_2:0.1-3ubuntu4-ku1-2_i386
+#
+#    2:0.1-3ubuntu4	upstream (debian+ubuntu) version
+#    ku1-2		klabs version
+#
+# ubuntu version:
+#
+#    2		boh? need to investigate this ;)
+#    0.1	upstream (debian) version
+#    3ubuntu	ubuntu version
+#    4		ubuntu release (optional)
+#
+# klabs version
+#
+#    ku1		our current release (approved and released)
+#    2			release (optional, not yet approved)
+#
+CMD=`basename $0`
+
+usage()
+{
+	echo -e "\nusage: $0 { package_full_name | package_version }\n" >&2
+	exit 255
+}
+
+
+# (MAIN)
+
+set -u
+set -e
+
+[ $# != 1 ] && usage
+
+
+if basename "$1" | grep -q "_"
+then
+	# package_2:0.1-3ubuntu4-ku1-2_i386
+	set `basename "$1" | sed -e 's/\.deb//' -e 's/\.tar\.gz//' | tr '_' ' '`
+	pkg_name=$1
+	pkg_fullversion=$2
+	pkg_arch=${3:-""}
+else
+	# 2:0.1-3ubuntu4-ku1-2
+	pkg_name=
+	pkg_fullversion=$1
+	pkg_arch=
+fi
+
+
+# 2:0.1 3ubuntu4 ku1 2
+if echo "$pkg_fullversion" | grep -q ':'
+then
+	set `echo "$pkg_fullversion" | tr ':' ' '`
+	pkg_ubuntu_prefix=$1
+	pkg_fullversion=$2
+else
+	pkg_ubuntu_prefix=
+fi
+
+set `echo "$pkg_fullversion" | tr '-' ' '`
+case $pkg_fullversion in
+  *ubuntu*)
+  	if echo $1 | grep -q ubuntu
+	then
+		# 1.16.7ubuntu6
+		pkg_ubuntu_version=$(echo $pkg_fullversion | sed -e 's/.*\.\([0-9][0-9]*ubuntu[0-9][0-9]*\)/\1/')
+		pkg_up_version=$(echo $pkg_fullversion | sed -e "s/\.$pkg_ubuntu_version//")
+	else
+		# 1.16-7ubuntu6 -> 1.16 7ubuntu6
+		pkg_up_version=$1
+		pkg_ubuntu_version=$2
+	fi
+	pkg_ku_ver=${3:-""}
+	pkg_ku_rel=${4:-""}
+	pkg_ubuntu_branch=`echo $pkg_ubuntu_version | sed -e 's/ubuntu.*//'`
+	pkg_ubuntu_ver=`echo $pkg_ubuntu_version | sed -e 's/.*ubuntu//'`
+	set `echo "$pkg_ubuntu_ver" | sed -e 's/\./ /'`	# only first point
+	pkg_ubuntu_ver=$1
+	pkg_ubuntu_rel=${2:-""}
+	;;
+  *)
+  	pkg_up_version=$1
+	pkg_ubuntu_version=
+	pkg_ubuntu_branch=
+	pkg_ubuntu_ver=
+	pkg_ubuntu_rel=
+	pkg_ku_ver=${2:-""}
+	pkg_ku_rel=${3:-""}
+	;;
+esac
+
+if [ "$pkg_ku_rel" == "" ]
+then
+	pkg_ku_version=$pkg_ku_ver
+else
+	pkg_ku_version="${pkg_ku_ver}-$pkg_ku_rel"
+fi
+
+case $pkg_ku_version in
+  ""|ku*|kl*) ;;
+  *)	pkg_up_version="${pkg_up_version}-$pkg_ku_version"
+  	pkg_ku_version=
+	pkg_ku_ver=
+	pkg_ku_rel=
+	;;
+esac
+
+set `echo "$pkg_up_version" | sed -e 's/\./ /'`	# only first point
+pkg_up_ver=$1
+pkg_up_rel=${2:-""}
+
+
+echo "pkg_name=$pkg_name"
+echo "pkg_fullversion=$pkg_fullversion"
+echo "pkg_arch=$pkg_arch"
+echo
+echo "pkg_up_version=$pkg_up_version"
+echo "pkg_up_ver=$pkg_up_ver"
+echo "pkg_up_rel=$pkg_up_rel"
+echo
+echo "pkg_ubuntu_version=$pkg_ubuntu_version"
+echo "pkg_ubuntu_prefix=$pkg_ubuntu_prefix"
+echo "pkg_ubuntu_branch=$pkg_ubuntu_branch"
+echo "pkg_ubuntu_ver=$pkg_ubuntu_ver"
+echo "pkg_ubuntu_rel=$pkg_ubuntu_rel"
+echo
+echo "pkg_ku_version=$pkg_ku_version"
+echo "pkg_ku_ver=$pkg_ku_ver"
+echo "pkg_ku_rel=$pkg_ku_rel"
+
+exit 0

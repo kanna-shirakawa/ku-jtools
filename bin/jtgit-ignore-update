@@ -1,0 +1,117 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=$(basename $0)
+CMDVER="1.0"
+CMDSTR="$CMD v$CMDVER (2018/01)"
+
+
+usage()
+{
+	echo "
+=== $CMDSTR - add standard enties to .gitignore file ===
+
+usage: $CMD [options] ...
+
+options:
+  -f|--force		force creation of new file if 
+
+  -v|--verbose		be verbose
+  -q|--quiet		be quiet
+  -h|--help		show help
+  -D[n]|--debug[=n]	set debug, optionally with level
+  --			stop processing options
+
+* standard entries are read from $default file
+" >&2
+	[ $# != 0 ] && echo -e "\n$@\n" >&2
+	exit 127
+}
+
+
+cleanup()
+{
+	trap "" 1 2 3 ERR EXIT
+	:
+	trap 1 2 3 ERR EXIT
+}
+
+
+
+
+
+
+
+
+# (MAIN)
+
+trap 'echo -e "\n*INTR*\n"; exit 255' 1 2 3
+trap 'echo -e "\nunexpected error $? at $LINENO\n"' ERR
+trap 'cleanup' EXIT
+set -e
+set -u
+
+VERBOSE=true
+DEBUG=${DEBUG:-false}
+DBGLEVEL=${DBGLEVEL:-0}
+f_force=false
+
+default="/etc/jtools/gitignore"
+gitfile=".gitignore"
+new="$gitfile.tmp"
+
+while [ $# != 0 ]
+do
+  case $1 in
+    -h|--help)		usage ;;
+    -v|--verbose)	VERBOSE=true ;;
+    -q|--quiet)		VERBOSE=false ;;
+    -D|--debug)		DEBUG=true ;;
+    -D[0-9]|--debug=[0-9])
+    			DEBUG=true; DBGLEVEL=$(echo "X$1" | sed -e 's/^X-D//' -e 's/^X--debug=//')
+			;;
+    -f|--force)		f_force=true ;;
+    --)			break ;;
+    -*|"")		usage "unknown parm: '$1'" ;;
+  esac
+  shift
+done
+
+
+[ -f "$default" ] || {
+	echo "error, default file '$default' not found" >&2
+	exit 1
+}
+if [ -f "$gitfile" ]
+then
+	before=$(wc -l <$gitfile)
+	$VERBOSE && echo -n "updating '$gitfile' ($before entries) ... "
+else
+	if $f_force
+	then
+		$VERBOSE && echo -n "creating new file '$gitfile' ... "
+		:>$gitfile
+	else
+		echo "error, '$gitfile' doesn't exists, use --force to create one" >&2
+		echo "	(maybe you are in the wrong directory?)" >&2
+		exit 1
+	fi
+fi
+
+
+cat $gitfile "$default" >>$new
+sort -u -o $new $new
+
+if cmp $gitfile $new >/dev/null 2>/dev/null
+then
+	$VERBOSE && echo "not changed"
+else
+	after=$(wc -l <$new)
+	$VERBOSE && echo "now: $after entries"
+	cat $new >$gitfile
+	rm -f $new
+fi
+
+exit 0

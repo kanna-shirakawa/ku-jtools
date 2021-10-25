@@ -1,0 +1,69 @@
+#!/bin/bash
+#
+# __copy1__
+# __copy2__
+#
+CMD=`basename $0`
+
+
+usage()
+{
+	echo "
+usage: $CMD [-x]
+
+* purge old version files from \$PRJ/sources dir
+* use -x to execute (default is show only actions)
+" >&2
+	exit 1
+}
+
+
+cleanup()
+{
+	rm -f $tmp
+}
+
+
+# (MAIN)
+
+f_exec=false
+
+[ X$1 == X-x ] && {
+	f_exec=true
+	shift
+}
+[ $# != 0 ] && usage
+
+tmp=`mktemp /tmp/$CMD-XXXXXXXXX`
+
+trap "echo '*INTR*'; cleanup; exit 255" 1 2 3
+
+cd $PRJ/sources || {
+	cleanup
+	exit $?
+}
+
+echo "purging \$PRJ/sources dir ..."
+
+for file in `ls *.tar.gz 2>/dev/null`
+do
+	eval `jtdeb-version $file`
+	echo $pkg_name >>$tmp
+done
+sort -u -o $tmp $tmp
+
+for file in `cat $tmp`
+do
+	files=`ls -t ${file}_*`
+	set `echo "$files" | wc -l`
+	case $1 in
+	  1)	;; # ok
+	  *)	files=`echo "$files" | sed -e '1d'`
+	  	echo " purge " $files
+		$f_exec && rm -f $files
+		;;
+	esac
+done
+
+cleanup
+exit 0

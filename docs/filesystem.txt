@@ -1,0 +1,44 @@
+docs project filesystem structure
+
+<!> documentazione incompleta e in corso di modifica
+
+== overview ==
+
+Struttura standard di un filesystem di progetto:
+
+ {{{
+project -+- bin       commands
+         +- docs      documentation
+         +- etc       definitions
+         +- src       sources trunks
+ }}}
+
+=== bin ===
+Contiene i comandi relativi al progetto: eseguibili binari, scripts.
+
+=== etc ===
+Contiene files di configurazione e definizione specifici al progetto.
+In realta' parte della definizione dell'environment di progetto avviene
+tramite files system-wide, ad esempio sotto /etc/default e /etc.
+
+=== docs ===
+........................
+
+Files standard:
+
+ * '''requires''' elenco dei progetti dai quali dipende questo, elencati
+ uno per riga, intesi come tool-sets installati sul sistema; la validazione
+ avviene cercando nell'ordine la presenza del file /etc/default/progetto_richiesto
+ e dell'eventuale eseguibile <nomeprogetto>-env, cercato a sua volta in
+ /usr/bin e nel path di ricerca dei progetti
+
+ * '''profile''' script shell di profilo, viene eseguito (incluso) dal comando
+ [[oscj]] e contiene tipicamente la definizione di variabili di environment
+ 
+
+=== altri files ===
+ * '''/etc/default/<nomeprogetto>''' definizioni system-wide, in formato
+ shell, delle variabili di environment relative al progetto
+
+ * '''/etc/<nomeprogetto>''' directory system-wide di definizioni del progetto
+ <!> contenuto vario, per ora non speficicato
