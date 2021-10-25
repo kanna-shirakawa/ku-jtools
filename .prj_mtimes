@@ -1,4 +1,4 @@
-.|1635174628|kanna
+.|1635174694|kanna
 templates|1348362536|kanna
 templates/fossil-project-entry.html|1348358212|kanna
 templates/wiki-page|1282523979|kanna
@@ -7,18 +7,19 @@ templates/fossil-projects.html|1348360837|kanna
 templates/wiki-index|1301195853|kanna
 templates/info|1282523979|kanna
 templates/desc|1282523979|kanna
-fedora|1635174022|kanna
-fedora/ku-jtools.spec|1635174322|kanna
 conf.d|1411247698|kanna
 conf.d/00defaults|1411247698|kanna
 conf.d/wiki-company|1300950647|kanna
 conf.d/wiki-generic|1301195822|kanna
 conf.d/wiki-site|1300980148|kanna
 README.md|1635173027|kanna
-obsolete|1635171886|kanna
+obsolete|1635174673|kanna
 obsolete/jtmoin-readpage|1301196539|kanna
 obsolete/jtmoin-updatepage|1301196551|kanna
 obsolete/tpl-moin-index-page|1282523979|kanna
+obsolete/fedora.in|1635174321|kanna
+obsolete/fedora.in/ku-jtools.spec|1635174322|kanna
+obsolete/fedora.in/ku-jtools.spec.in|1350982515|kanna
 conf|1516065413|kanna
 conf/gitignore|1516065397|kanna
 install-prev|1635173957|kanna
@@ -115,7 +116,7 @@ ku/history.new|1635174322|kanna
 ku/install.sh|1351004254|kanna
 ku/history|1635174592|kanna
 ku/install|1634996669|kanna
-.jtscm-autosync.lock|1635174628|kanna
+.jtscm-autosync.lock|1635174694|kanna
 debian|1635174322|kanna
 debian/compat|1635174322|kanna
 debian/changelog|1635174322|kanna
@@ -125,9 +126,6 @@ debian/control|1635174322|kanna
 misc|1301196906|kanna
 misc/jtools.sh|1301196906|kanna
 Makefile|1635174319|kanna
-fedora.in|1635174321|kanna
-fedora.in/ku-jtools.spec|1635174322|kanna
-fedora.in/ku-jtools.spec.in|1350982515|kanna
 install|1635174399|kanna
 install/install-functions.sh|1385941802|kanna
 install/install.sh|1351004211|kanna
