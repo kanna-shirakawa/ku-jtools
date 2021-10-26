@@ -1,3 +1,11 @@
+ku-jtools (1.1-ku21-10b) unstable; urgency=low
+
+  * install/* install-prev/*
+    - fix: clean up of versions mess
+
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 26 Oct 2021 12:51:13 +0200
+
 ku-jtools (1.1-ku21-10a) unstable; urgency=low
 
   * jtcj
@@ -25,7 +33,6 @@ ku-jtools (1.1-ku21-10a) unstable; urgency=low
   * jtdeb-cache
     - fix: removed bashism (== instead of =)
     - fix: now works on temp files, overwrite target ones only on success
-
 
  -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Mon, 25 Oct 2021 17:05:21 +0200
 

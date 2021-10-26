@@ -1,12 +1,9 @@
-ku-jtools (1.1-ku21-10b) unstable; urgency=low
+2021-10-26 12:51:13 1.1 ku21.10b Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
 
   * install/* install-prev/*
     - fix: clean up of versions mess
 
-
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 26 Oct 2021 12:51:13 +0200
-
-ku-jtools (1.1-ku21-10a) unstable; urgency=low
+2021-10-25 17:05:21 1.1 ku21.10a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
 
   * jtcj
     - new: --cd option, to force moving in the specified directory after connect
@@ -34,15 +31,11 @@ ku-jtools (1.1-ku21-10a) unstable; urgency=low
     - fix: removed bashism (== instead of =)
     - fix: now works on temp files, overwrite target ones only on success
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Mon, 25 Oct 2021 17:05:21 +0200
-
-ku-jtools (1.1-ku21-05) unstable; urgency=low
+2021-09-18 13:05:34 1.1 ku21.05 Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
 
   * production release ku21.05
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sat, 18 Sep 2021 13:05:34 +0200
-
-ku-jtools (1.1-ku21-04a) unstable; urgency=low
+2021-04-21 17:25:31 1.1 ku21.04a KUBiC Labs (CH) <packager@kubiclabs.com>
 
   * meta: package owner
     - mod: Allblue SA dismissed, now is KUBiC Labs only
@@ -50,9 +43,7 @@ ku-jtools (1.1-ku21-04a) unstable; urgency=low
     	   usually is a locase letter; releases YY.mm (w/out patchlevel) are
 	   production ones
 
- -- KUBiC Labs (CH) <packager@kubiclabs.com>  Wed, 21 Apr 2021 17:25:31 +0200
-
-ku-jtools (1.1-ku19-08) unstable; urgency=low
+2019-12-03 11:20:32 1.1 ku19.08 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   - bin/jtcj
     - add: list mode (option --list), scans directories in $JTPATH env var, or
@@ -69,15 +60,11 @@ ku-jtools (1.1-ku19-08) unstable; urgency=low
   - bin/jtmkpath
     - fix: fails on undefined owner if relative path was used
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 03 Dec 2019 11:20:32 +0100
-
-ku-jtools (1.1-ku19-06) unstable; urgency=low
+2019-10-30 16:04:12 1.1 ku19.06 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * production release 1.1-ku19.06
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Wed, 30 Oct 2019 16:04:12 +0100
-
-ku-jtools (1.1-ku19-05) unstable; urgency=low
+2019-10-28 09:14:22 1.1 ku19.05 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * lib/_jt_truncate_cwd.sh
     - mod: moved to package ku-base, renamed to /lib/ku-base/ku_truncate_cwd.sh
@@ -91,15 +78,11 @@ ku-jtools (1.1-ku19-05) unstable; urgency=low
   * bin/jtmkpath
     - fix: wrong user:group used on missing directory in paths
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 28 Oct 2019 09:14:22 +0100
-
-ku-jtools (1.1-ku19-04) unstable; urgency=low
+2019-06-30 14:20:31 1.1 ku19.04 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * production release 1.1-ku19.04
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sun, 30 Jun 2019 14:20:31 +0200
-
-ku-jtools (1.1-ku19-03) unstable; urgency=low
+2019-06-28 17:16:43 1.1 ku19.03 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * jtcj
     - fix: $PRJBATCHMODE not exported to current environment
@@ -115,15 +98,11 @@ ku-jtools (1.1-ku19-03) unstable; urgency=low
     - mod: CMDVER, CMDSTR; improved some messages, cleaned code (removed bash-isms,
     	   changed all backticks with $() notation)
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 28 Jun 2019 17:16:43 +0200
-
-ku-jtools (1.1-ku19-02) unstable; urgency=low
+2019-04-12 21:10:34 1.1 ku19.02 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * production release 1.1-ku19.02
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 12 Apr 2019 21:10:34 +0200
-
-ku-jtools (1.1-ku19-01) unstable; urgency=low
+2019-04-12 11:30:11 1.1 ku19.01 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * jtrepo-rebuild
     - add: gpg key signature, full creation of Packages, Release.gpg, InRelease files;
@@ -131,15 +110,11 @@ ku-jtools (1.1-ku19-01) unstable; urgency=low
            gpg key file name can be set in file $PRJ/etc/gpg_key_filename (default:
 	   $PRJ/gpg/KEY.pgp)
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 12 Apr 2019 11:30:11 +0200
-
-ku-jtools (1.1-ku19-00) unstable; urgency=low
+2019-03-02 13:39:03 1.1 ku19.00 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * production release 1.1-ku19.00
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sat, 02 Mar 2019 13:39:03 +0100
-
-ku-jtools (1.1-ku0-11) unstable; urgency=low
+2018-07-30 14:20:45 1.1 ku0.11 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * bin/jtwiki-updatepage
     - mod: pages are no more generated in foswiki format
@@ -156,15 +131,11 @@ ku-jtools (1.1-ku0-11) unstable; urgency=low
     	   instead of guessing based from package filename
     - mod: messages aestetical changes and minor bug fixes
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 30 Jul 2018 14:20:45 +0200
-
-ku-jtools (1.1-ku0-10) unstable; urgency=low
+2018-06-12 14:01:20 1.1 ku0.10 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * production release 1.1-ku0.10
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 12 Jun 2018 14:01:20 +0200
-
-ku-jtools (1.1-ku0-9) unstable; urgency=low
+2018-06-12 12:05:47 1.1 ku0.9 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * jtinstall
     - fix: all modification tests fails on symlinked files; added --dereference
@@ -178,15 +149,11 @@ ku-jtools (1.1-ku0-9) unstable; urgency=low
     - add: --flat option to produce dump in flat format (section embedded in
     	   variable name)
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 12 Jun 2018 12:05:47 +0200
-
-ku-jtools (1.1-ku0-8) unstable; urgency=low
+2018-05-13 17:02:20 1.1 ku0.8 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * production release 1.1-ku0.8
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sun, 13 May 2018 17:02:20 +0200
-
-ku-jtools (1.1-ku0-7) unstable; urgency=low
+2018-03-12 16:55:50 1.1 ku0.7 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * jtgit-ignore-update
     - new: command to add standard entries in current .gitignore project file
@@ -204,15 +171,11 @@ ku-jtools (1.1-ku0-7) unstable; urgency=low
   * jtdeb-rebuild
     - fix: now calls jdeb-clean for a *real* cleanup
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 12 Mar 2018 16:55:50 +0100
-
-ku-jtools (1.1-ku0-6) unstable; urgency=low
+2018-09-14 02:13:15 1.1 ku0.6 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * production release 1.1-ku0.6
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 14 Sep 2018 02:13:15 +0200
-
-ku-jtools (1.1-ku0-5) unstable; urgency=low
+2017-09-13 14:49:51 1.1 ku0.5 KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>
 
   * jtdeb-port
     - fix: fails to detect working source directory because don't uses version
@@ -220,5 +183,3 @@ ku-jtools (1.1-ku0-5) unstable; urgency=low
     	   nfs delays
 
   * jtdeb-cache
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Wed, 13 Sep 2017 14:49:51 +0200
-
