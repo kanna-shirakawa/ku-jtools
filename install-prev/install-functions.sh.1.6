@@ -1,12 +1,9 @@
 #!/bin/bash
 # install-functions.sh - common helpers for installation tasks
+# VERSION 1.6
 #
-# VERSION 1.7 (2021-10-26)
-#
-# BETTER TO NOT MODIFY THIS FILE, USE custinstall.sh INSTEAD
-#
-# (c) 2011-2021 Lorenzo Canovi <lorenzo.canovi@kubiclabs.com>
-# for copyright see /usr/share/doc/jtools/copyright
+# (c) 2011-2018 Lorenzo Canovi <lorenzo.canovi@kubiclabs.com>
+# released under GPL v.2
 
 # global placeholders
 #
@@ -32,16 +29,16 @@ export copy2=		# copyright (string 2)
 
 # actual timestamp
 #
-export today=$(date)
-export dtoday=$(date -R)		# for debian changelog
-export rtoday=$(date '+%a %b %d %Y')	# for rpm changelog
+export today=`date`
+export dtoday=`date -R`			# for debian changelog
+export rtoday=`date '+%a %b %d %Y'`	# for rpm changelog
 
 
 # internals
 #
 default_owner="root:root"
 default_mode="644"
-tempinstall=$(mktemp /tmp/install-XXXXXXXXXXX)
+tempinstall=`mktemp /tmp/install-XXXXXXXXXXX`
 
 
 
@@ -58,7 +55,7 @@ set_defaults()
 
 	prefix=${prefix:-/usr}
 	confdir=${confdir:-/etc/$TOOLKIT}	# confs always under /etc!
-	drelease=$(echo $RELEASE | tr '.' '-')
+	drelease=`echo $RELEASE | tr '.' '-'`
 
 	if [ "$prefix" == "/" -o "$prefix" == "/usr" ]
 	then
@@ -158,7 +155,7 @@ installfile()
 				echo "error, you must supply a filename if source is /dev/null" >&2
 				return 1
 			}
-			realdest="$realdest$(basename $file)"
+			realdest="$realdest`basename $file`"
 		else
 			echo "installing file '$file' to '$dest'" >&2
 			echo "destination '$realdest' is a directory" >&2
@@ -182,7 +179,7 @@ installfile()
 
 	if $nullfile
 	then
-		:>"$realdest"
+		cp /dev/null "$realdest"
 	else
 		if $parse
 		then
@@ -232,11 +229,9 @@ installfile()
 
 ## === create_dir path user:group [mode] ===
 ##
-## create a directory with parent path if needed
-##
-## if jtmkpath command is available, use it to create intermediate
-## directories in a smart way (obeyng cascade owners/perms), otherwise
-## current user and perms are used
+## crea directory indicata da path se non esiste, creando anche
+## il path completo, in questo caso le directories intermedie
+## se non esistono vengono create con utente root:root e mode 0775
 ##
 create_dir()
 {
@@ -248,7 +243,7 @@ create_dir()
 	# first run, create dir if not exists, with full path if needed
 	# secon run, fix perms (always executed)
 	#
-	if [ "$(which jtmkpath)" != "" ]
+	if [ "`which jtmkpath`" != "" ]
 	then
 		jtmkpath -v $fixperms $path $user $mode || return $?
 		jtmkpath --fixperms $path $user $mode || return $?
@@ -384,7 +379,7 @@ install_files()
 	exec 9<&0 <$tempinstall
 	while read file dest owner perms otherparms
 	do
-		file=$(echo "$file" | sed -e 's/[ ,	]*#.*//')
+		file=`echo "$file" | sed -e 's/[ ,	]*#.*//'`
 		owner=${owner:-$default_owner}
 		perms=${perms:-$default_mode}
 		line="$dest $owner $perms $otherparms"
@@ -398,7 +393,7 @@ install_files()
 		  *.tmp)	continue ;;
 		  "")		continue ;;
 		esac
-		files=$(ls $file 2>/dev/null) || {
+		files=`ls $file 2>/dev/null` || {
 			echo "error: '$file' does not expand to valid filename(s)" >&2
 			echo "line: $line" >&2
 			return 1
@@ -420,14 +415,14 @@ make_control_files()
 	local distro=
 	local mode=
 
-	[ -f ku/history -a "$(which jtchangelog-build)" != "" ] && jtchangelog-build
+	[ -f ku/history -a "`which jtchangelog-build`" != "" ] && jtchangelog-build
 
 	for distro in debian fedora
 	do
 		if [ -d $distro.in ]
 		then
 			echo "pre-processing $distro control files ..." >&2
-			for file in $(ls $distro.in | grep -v '\.in$')
+			for file in `ls $distro.in | grep -v '\.in$'`
 			do
 				if [ -x "$distro.in/$file" ]
 				then

@@ -1,13 +1,27 @@
-:TOOLKIT	sample-package
+# ku/install - klabs project sample install file
+#
+# VERSION 1.1 (2021-10-26)
+#
+# note: the version line above is only a reference, it's supposed
+# that you modify this template file to suite your needs
+#
+# (c) 2011-2021 Lorenzo Canovi <lorenzo.canovi@kubiclabs.com>
+# for copyright see /usr/share/doc/jtools/copyright
+
+# XXX REPLACE ALL xx WITH PROPER VALUES
+
+:TOOLKIT	xx-sample-package-xx
 :VERSION	1.0
-:RELEASE	xx0
-:SIGNATURE	$VERSION-$RELEASE (2012/10)
-:description	KUBiC Labs sample-package
+:RELEASE	kuxx.xx
+:SIGNATURE	$VERSION-$RELEASE (20xx-xx-xx)
+:description	KUBiC Labs xx-sample-package-xx
 
 :maintainer	KUBiC Labs - Lorenzo Canovi <lorenzo@kubiclabs.com>
 :homepage	http://www.kubiclabs.com
 :copy1		maintainer: $maintainer
 :copy2		for copyright see /usr/share/doc/$TOOLKIT/copyright
+
+# XXX SAMPLE ENTRIES - REMOVE UNWANTED ONES
 
 :dir		$bindir
 :dir		$libdir
@@ -21,9 +35,10 @@
 
 conf.d/*	$confdir/conf.d/
 docs/*		$docdir/
+lib/*		$libdir/
 templates/*	$libdir/templates/
+
 
 :default_mode	755
 
 bin/*		$bindir/
-lib/*		$libdir/

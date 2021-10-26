@@ -1,3 +1,8 @@
+  * install/* install-prev/*
+    - fix: clean up of versions mess
+
+2021-10-25 17:05:21 1.1 ku21.10a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
   * jtcj
     - new: --cd option, to force moving in the specified directory after connect
 
@@ -23,14 +28,6 @@
   * jtdeb-cache
     - fix: removed bashism (== instead of =)
     - fix: now works on temp files, overwrite target ones only on success
-
-  * Makefile (install/Makefile)
-    - mod: added 'debianize' target, to produce a clean project debian
-    	   compatibile: the control metafiles contained in "ku" and
-	   "debian.in" directories are processed, the project is cleaned
-	   running jtdeb-clean; note that the changelog file in debian
-	   dir is produced in different steps:
-	     ku/history -> debian.in/changelog -> debian/changelog
 
 2021-09-18 13:05:34 1.1 ku21.05 Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
 
