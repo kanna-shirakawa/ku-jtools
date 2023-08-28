@@ -4,8 +4,8 @@
 # __copy2__
 #
 CMD=$(basename $0)
-CMDVER="1.10"
-CMDSTR="$CMD v$CMDVER (2020/09)"
+CMDVER="1.11"
+CMDSTR="$CMD v$CMDVER (2021-12-14)"
 
 set -u
 set -e
@@ -46,9 +46,9 @@ usage:	$CMD [options] file destination [owner [mode]]
 	$CMD --makeinput
 
 OPTIONS:
-  -v|--verbose	be verbose (default: $VERBOSE)
+  -v|--verbose	be verbose (now: $VERBOSE)
   -q|--quiet	be quiet
-  -D|--debug	set debug
+  -D|--debug	set debug (now: $DEBUG)
   -n|--dry-run	don't do anything, only show actions
 
   --fixperms	only fix permissions (don't install)
@@ -189,8 +189,8 @@ compare()
 
 	[ -e "$1" ]		|| return 1	# no file1
 	[ -e "$2" ]		|| return 1	# no file2
-	local size1=`stat --dereference --format='%s' "$1"`
-	local size2=`stat --dereference --format='%s' "$2"`
+	local size1=$(stat --dereference --format='%s' "$1")
+	local size2=$(stat --dereference --format='%s' "$2")
 	pdebug "size: $size1 $1"
 	pdebug "size: $size2 $2"
 	[ $size1 = $size2 ]	|| return 1	# size
@@ -266,7 +266,7 @@ installfile()
 	then
 		if echo "$dest" | grep -q "/$"
 		then
-			dest="$dest`basename \"$file\"`"
+			dest="$dest$(basename \"$file\")"
 		else
 			error "destination '$dest' is a directory"
 			return 1
@@ -282,12 +282,12 @@ installfile()
 
 	echocr " checking '$dest' ... \r"
 
-	backup=`set_backup_filename "$dest"` || return 1
+	backup=$(set_backup_filename "$dest") || return 1
 
 	$f_parse && {
 		if [ -f "$file" ]
 		then
-			case `file "$file"` in
+			case $(file "$file") in
 				*text*)	;;
 				*)	f_parse=false ;;
 			esac
@@ -303,7 +303,7 @@ installfile()
 		then
 			tempdefines="--include $KU_TEMPDEFINES"
 		else
-			tempdefines="--include `pwd`/$KU_TEMPDEFINES"
+			tempdefines="--include $(pwd)/$KU_TEMPDEFINES"
 		fi
 	}
 
@@ -338,7 +338,7 @@ installfile()
 	# backup?
 	[ "$backup" != "" -a -f "$dest" -a ! -f "$backup" ] && {
     		$VERBOSE && echo "  bck '$backup'" >&2
-		dir=`dirname $backup`
+		dir=$(dirname $backup)
 		[ -d "$dir" ] || $MKDIR -p "$dir"
 		$MV "$dest" "$backup" || return 1
 	}
@@ -375,6 +375,8 @@ fixperms()
 	local tmtime=
 	local need_fix=false
 
+	pdebug "d=$dest o=$owner p=$perms ref=$reference verb=$verbose"
+
 	[ -e "$dest" ] || {
 		$F_Exec || return 0	# nop
 		error "(fixperms) file/dir '$dest' not found"
@@ -383,10 +385,10 @@ fixperms()
 
 	# stores temp stats to show changes, if any
 	#
-	tperms=`stat --dereference --format '%a' "$dest"`
-	towner=`stat --dereference --format '%U:%G' "$dest"`
+	tperms=$(stat --dereference --format '%a' "$dest")
+	towner=$(stat --dereference --format '%U:%G' "$dest")
 	tmtime=$(stat --dereference --format '%Y' "$dest"); tmtime=$(date '+%Y%m%d-%H%M%S' --date "@$tmtime")
-	before=`printf "%4s %-16s %s" "$tperms" "$towner" "$tmtime"`
+	before=$(printf "%4s %-16s %s" "$tperms" "$towner" "$tmtime")
 
 	[ "$KU_INSTALL_GROUP" != "" ] && {
 		if [ "$defaultowner" = "" ]
@@ -404,16 +406,19 @@ fixperms()
 		if [ "$reference" != "" ]
 		then
 			compareowner "$dest" $(stat --dereference --format='%U:%G' "$reference") || {
+				pdebug "$CHOWN --reference='$reference'"
 				$CHOWN --reference="$reference" "$dest" || return $?
 			}
 		elif [ "$defaultowner" != "" ]
 		then
 			compareowner "$dest" "$defaultowner" || {
+				pdebug "$chown $defaultowner"
 				$chown $defaultowner "$dest" || return $?
 			}
 		fi
 	else
 		compareowner "$dest" "$owner" || {
+			pdebug "$CHOWN $owner"
 			$CHOWN $owner "$dest" || return $?
 		}
 	fi
@@ -423,6 +428,7 @@ fixperms()
 		if [ "$reference" != "" ]
 		then
 			comparemodes "$dest" $(stat --dereference --format='%a' "$reference") || {
+				pdebug "$CHMOD --reference='$reference'"
 				$CHMOD --reference="$reference" "$dest" || return $?
 			}
 		elif [ "$KU_INSTALL_MODE" != "" ]
@@ -430,31 +436,35 @@ fixperms()
 			if [ -d "$dest" ]
 			then
 				comparemodes "$dest" $KU_INSTALL_DIRMODE || {
+					pdebug "(DIR) $CHMOD $KU_INSTALL_DIRMODE"
 					$CHMOD $KU_INSTALL_DIRMODE "$dest" || return $?
 				}
 			else
 				comparemodes "$dest" $KU_INSTALL_MODE || {
+					pdebug "(FILE) $CHMOD $KU_INSTALL_DIRMODE"
 					$CHMOD $KU_INSTALL_MODE "$dest" || return $?
 				}
 			fi
 		fi
 	else
 		comparemodes "$dest" $perms || {
+			pdebug "$CHMOD $perms"
 			$CHMOD $perms "$dest" || return $?
 		}
 	fi
 
-	# lc 2020.09.21 - retains original mtime
-	[ "X$reference" != "X" ] && {
-		comparemtime "$dest" $(stat --dereference --format='%Y' "$reference") || {
-			$TOUCH --reference="$reference" "$dest" || return $?
-		}
-	}
+	# 2021-12-14 kanna WTF!? why I added this crap?
+	# 2020.09.21 kanna retains original mtime
+	#[ "X$reference" != "X" ] && {
+		#comparemtime "$dest" $(stat --dereference --format='%Y' "$reference") || {
+			#$TOUCH --reference="$reference" "$dest" || return $?
+		#}
+	#}
 
-	tperms=`stat --dereference --format '%a' "$dest"`
-	towner=`stat --dereference --format '%U:%G' "$dest"`
+	tperms=$(stat --dereference --format '%a' "$dest")
+	towner=$(stat --dereference --format '%U:%G' "$dest")
 	tmtime=$(stat --dereference --format '%Y' "$dest"); tmtime=$(date '+%Y%m%d-%H%M%S' --date "@$tmtime")
-	after=`printf "%4s %-16s %s" "$tperms" "$towner" "$tmtime"`
+	after=$(printf "%4s %-16s %s" "$tperms" "$towner" "$tmtime")
 
 	[ X"$before" != X"$after" ] && {
 		ChangesMade=true
@@ -476,17 +486,17 @@ set_backup_filename()
 	[ "$KU_BACKUP_DIR" = "" ] && return 0
 
 	case $KU_BACKUP_TYPE in
-	  day)	echo "$KU_BACKUP_DIR/$dest.`date '+%Y%m%d'`" ;;
-	  hour)	echo "$KU_BACKUP_DIR/$dest.`date '+%Y%m%d-%H'`" ;;
+	  day)	echo "$KU_BACKUP_DIR/$dest.$(date '+%Y%m%d')" ;;
+	  hour)	echo "$KU_BACKUP_DIR/$dest.$(date '+%Y%m%d-%H')" ;;
 	  prog)
-	  	prev=`ls "$KU_BACKUP_DIR/$dest."[0-9][0-9][0-9][0-9] 2>/dev/null | tail -1`
+	  	prev=$(ls "$KU_BACKUP_DIR/$dest."[0-9][0-9][0-9][0-9] 2>/dev/null | tail -1)
 		if [ "$prev" = "" ]
 		then
 			num="0000"
 		else
-			num=`echo "$prev" | sed -e 's/.*\.\(....\)$/\1/'`
-			num=`echo "$num+1" | dc`
-			num=`printf "%04d" $num`
+			num=$(echo "$prev" | sed -e 's/.*\.\(....\)$/\1/')
+			num=$(echo "$num+1" | dc)
+			num=$(printf "%04d" $num)
 		fi
 		echo "$KU_BACKUP_DIR/$dest.$num"
 		;;
@@ -512,7 +522,7 @@ parse_installfile()
 		then
 			tempdefines="--include $KU_TEMPDEFINES"
 		else
-			tempdefines="--include `pwd`/$KU_TEMPDEFINES"
+			tempdefines="--include $(pwd)/$KU_TEMPDEFINES"
 		fi
 	}
 
@@ -576,7 +586,7 @@ parse_inputfile()
 				# ar not explicit, uses parent dir as reference
 				#
 				owner=${owner:-$default_owner}
-				fixperms $dest "$owner" "$perms" "`dirname $dest`" $verbose || return $?
+				fixperms $dest "$owner" "$perms" "$(dirname $dest)" $verbose || return $?
 				continue
 				;;
 
@@ -588,7 +598,7 @@ parse_inputfile()
 					#owner=${owner:-"root:root"}
 					#perms=${perms:-"0775"}
 					$MKDIR $dest || return $?
-					fixperms $dest "" "" "`dirname $dest`" $VERBOSE || return $?
+					fixperms $dest "" "" "$(dirname $dest)" $VERBOSE || return $?
 				}
 				continue
 				;;
@@ -784,7 +794,7 @@ do
 			case "$1" in
 			  *\ *)	usage "sorry, spaces not allowed in include files" ;;
 			  /*)	JtIncludes="$JtIncludes --include $1" ;;
-			  *)	JtIncludes="$JtIncludes --include `pwd`/$1" ;;
+			  *)	JtIncludes="$JtIncludes --include $(pwd)/$1" ;;
 			esac
 			;;
     --)			break ;;
@@ -823,8 +833,8 @@ $F_MakeInput && {
 	exit $?
 }
 
-TmpInstall=`mktemp /tmp/$CMD-inst-XXXXXXXXXX` || exit 1
-TmpInput=`mktemp /tmp/$CMD-input-XXXXXXXXXX` || exit 1
+TmpInstall=$(mktemp /tmp/$CMD-inst-XXXXXXXXXX) || exit 1
+TmpInput=$(mktemp /tmp/$CMD-input-XXXXXXXXXX) || exit 1
 
 trap "echo '*INTR*'; cleanup; exit 255" 1 2 3
 trap "cleanup" EXIT

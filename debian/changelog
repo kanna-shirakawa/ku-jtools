@@ -1,10 +1,116 @@
-ku-jtools (1.1-ku21-10b) unstable; urgency=low
+ku-jtools (1.1-ku23-08a) unstable; urgency=low
+
+  * debian/compat: (devuan daedalus) raised to 10
+
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Mon, 28 Aug 2023 14:20:39 +0200
+
+ku-jtools (1.1-ku23-07a) unstable; urgency=low
+
+  * bin/jtcj
+    - mod: now you can pass non-absolute paths to --cd option, paths are relative
+    	   to $PRJ
+
+  * bin/jdeb-port
+    - mod: uses relative instead of absolute path to change directory in remote system
+    	   (see changes to bin/jtcj)
+    - fix: runs jtrepo-update only if there are no errors on rebuild phase
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sun, 23 Jul 2023 09:41:09 +0200
+
+ku-jtools (1.1-ku23-03c) unstable; urgency=low
+
+  * bin/jtrepo-rebuild
+    - mod: info messages improved
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Thu, 30 Mar 2023 14:23:49 +0200
+
+ku-jtools (1.1-ku23-03b) unstable; urgency=low
+
+  * bin/jdeb-purge-pkgs, bin/jtdeb-purge-sources
+    - fix: added missing standard version env vars (CMDVER, CMDSTR)
+    - fix: replaced "cp /dev/null" with ":>" on file creation
+    - mod: replaced all backticks with "$(..)" notation
+    - mod: various aestetical stuffs (usage, messages, etc)
+
+  * bin/jtdeb-rebuild
+    - mod: removed deprecated (and unused) --alldistros option; now the script
+    	   works, as espected, only for selected distro (current, or passed as
+	   argument); all related tasks (output files displacement, packages
+	   dir cleanup) are now optimized for the current distro only
+
+  * bin/jtrepo-rebuild
+    - fix: permission fix runs on the full "target" tree, instead of single distro
+           (now only on the working distro)
+
+  * bin/jtdeb-port (and related: jtrepo-rebuild, jtrepo-update)
+    - mod: now the release files rebuild are done on target distro system, not on
+    	   original system (where the jtdeb-port command is launched); this ensure that
+	   each distro uses the right version of debian helpers
+
+  * debian/rules (debian.in/rules)
+    - fix: reverted the changes of last release (compatibility issues raised by updating
+    	   release files on old systems are solved, see changes to jtdeb-port above)
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 14 Mar 2023 16:48:30 +0100
+
+ku-jtools (1.1-ku23-03a) unstable; urgency=low
+
+  * debian/rules (debian.in/rules)
+    - fix: force backward compatibility gzip format on newer distros (that defaults to xz):
+           added -Zgzip to dh_builddeb
+
+  * bin/jtmkpath
+    - fix: permissions wasn't set on new created dirs
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sun, 12 Mar 2023 13:06:01 +0100
+
+ku-jtools (1.1-ku22-12a) unstable; urgency=low
+
+  * bin/jtscm-autosync
+    - fix: fails on some bash versions due 'continue' instead of 'return 0' ad line 219
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Wed, 28 Dec 2022 13:20:34 +0100
+
+ku-jtools (1.1-ku22-10a) unstable; urgency=low
+
+  * bin/jtmkpath
+    - fix: if target exists and is a symlink on some system using chown will raise an
+    	   error, fixed (ignored if target is a symlink)
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 18 Oct 2022 17:42:31 +0200
+
+ku-jtools (1.1-ku22-03a) unstable; urgency=low
+
+  * bin/jtscm-restore-mtimes
+    - fix: filenames containing regexp sequence causes troubles; fixed parsing filenames
+    	   to escape such sequences before passing them to grep
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Fri, 25 Mar 2022 18:10:02 +0100
+
+ku-jtools (1.1-ku22-01a) unstable; urgency=low
+
+  * bin/jtdeb-rebuild
+    - fix: cleanup log now is in logical (not physical) parent dir
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sat, 29 Jan 2022 12:15:17 +0100
+
+ku-jtools (1.1-ku21-12a) unstable; urgency=low
 
   * install/* install-prev/*
     - fix: clean up of versions mess
 
+  * jtinstall
+    - fix: removed a crap (temp?) patch that forced mtime on target files even
+    	   if there is no modifications (why?)
+    - mod: cosmetic, replaced all backticks with $(..)
+    - mod: more detailed debug messages on chmod/chown stages
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 26 Oct 2021 12:51:13 +0200
+  * jtconf-parse
+    - fix: command version ($Cmd, $CmdVer, $CmdStr)
+    - add: env overrides for $DEBUG and $DEBUGLEVEL
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Wed, 28 Dec 2022 10:13:01 +0100
 
 ku-jtools (1.1-ku21-10a) unstable; urgency=low
 

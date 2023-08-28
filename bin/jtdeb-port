@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# __copy1__
-# __copy2__
+# (c) Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+# for copyright see /usr/share/doc/jtools/copyright
 #
 CMD=$(basename $0)
-CMDVER="1.6"
-CMDSTR="$CMD v$CMDVER (2020-10-25)"
+CMDVER="1.9"
+CMDSTR="$CMD v$CMDVER (2023-07-23)"
 
 TFILE="etc/hostaliases"
 
@@ -41,6 +41,9 @@ options:
   	when target list is used, remotely runs under this project (default
 	is same current project name; note that project name is used, the
 	target hosts can resolve this to different dirs than original)
+
+  --update-repos
+  	calls jtrepo-update at end
 
   sourcefile(s)
   	can be tar.gz files or directories under src
@@ -128,12 +131,16 @@ rec_error()
 
 . /etc/default/kusa-paths
 
+sysname=$(uname -n); sysname=${sysname/.*}
 sources=
 targets=
 prjname=
+update_repos=false
+update_repos_flag=
 distro=
 distro_opt=
 here=$(pwd)
+prj_here=$(echo "$here" | sed -e "s#$PRJ/##")
 parent=$( (cd ..; pwd) )
 searchdirs="
 	$parent
@@ -149,8 +156,7 @@ DEBUG=${DEBUG:-false}
 trap "echo '*INTR*'; cleanup; exit 127" 1 2 3
 trap "cleanup" EXIT
 
-
-echo -e "\n== $CMDSTR args: $*\n"
+echo -e "\n=[$sysname] $CMDSTR args: $*\n"
 
 
 while [ $# != 0 ]
@@ -158,6 +164,10 @@ do
   case $1 in
    -h|--help)	usage ;;
    -D|--debug)	DEBUG=true ;;
+   --update-repos)
+   		update_repos=true
+		update_repos_flag="--update-repos"
+		;;
    -j|--prj)	shift
    		[ $# = 0 ] && usage
    		prjname=$1
@@ -219,14 +229,14 @@ esac
 		else
 			echo -e "\nTARGET SYSTEM: $target\n"
 		fi
-		ssh $target jtreset jtcj $dbg_flag --batch --cd "$here" ${prjname:-$PRJNAME} \
-			"$CMD $sources $distro_opt $@" || exit $?
+		ssh $target jtreset jtcj $dbg_flag --batch --cd "$prj_here" ${prjname:-$PRJNAME} \
+			"$CMD $update_repos_flag $sources $distro_opt $@" || exit $?
 	done
 	exit 0
 }
 
 [ -z "$prjname" ] || {
-	exec jtreset jtcj $dbg_flag --batch --cd "$here" $prjname "$CMD $sources $@"
+	exec jtreset jtcj $dbg_flag --batch --cd "$prj_here" $prjname "$CMD $sources $@"
 }
 
 errors=0
@@ -307,6 +317,13 @@ do
 			echo "BUILD LOG: $logdir/$logfile"
 		}
 	done
+
+	##### (cd $parent ; echo ===================; pwd; echo; ls -l ${pkgname}*; echo) ; set -x #######
+	logfile=$(ls $parent/${pkgname}_*.buildinfo 2>/dev/null || :)
+	[ -f "$logfile" ] && {
+		mv "$logfile" "$logdir/${pkgname}.buildinfo"
+		echo "BUILDINFO: $logdir/${pkgname}.buildinfo"
+	}
 	echo
 
 	$good || continue
@@ -314,6 +331,16 @@ do
 	cd $tempdir
 	rm -rf $dir
 done
+
+
+[ $ERRORS = 0 ] && {
+	$update_repos && {
+		eval $(ku-distroenv)
+		distro=${distro:-$DISTRIB_CODENAME}
+		##echo -e "\nrunning jtrepo-update $distro\n"
+		jtrepo-update $distro 2>&1 || rec_error "error $? running jtrepo-update $distro"
+	}
+}
 
 [ $ERRORS = 0 ] || {
 	echo -e "\nTOTAL ERRORS: $ERRORS\n$ERRSTR\n" >&2

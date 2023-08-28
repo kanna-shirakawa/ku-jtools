@@ -4,8 +4,8 @@
 # __copy2__
 #
 CMD=$(basename $0)
-CMDVER="1.8"
-CMDSTR="$CMD v.$CMDVER (2021-10-25)"
+CMDVER="1.10"
+CMDSTR="$CMD v.$CMDVER (2023-03-14)"
 
 set -e -u
 
@@ -31,10 +31,10 @@ options:
   -l		do not build, show only parms (workdir, pkgname, etc)
   		but preprocess control files if needed
   --movefiles	do not build, only moves debfiles to target dirs
-  --alldistros	copy generic (_all) files to all distros (*deprecated*)
   --nc		do not clean before build (passed as '-nc' to jtdeb-make)
   --nomove	don't move files after build
 " >&2
+  ##--alldistros	copy generic (_all) files to all distros (*deprecated*)
 
 	[ $# != 0 ] && echo -e "\n$@\n" >&2
 	exit 1
@@ -68,7 +68,7 @@ set_real_pkgname()
 	# obtain real pkgname from debian changelog
 	#
 	set $(head -1 debian/changelog) ""
-	[ "X$1" == "X" ] && {
+	[ "X$1" = "X" ] && {
 		echo "error, can't obtain package name from debian/changelog" >&2
 		exit 1
 	}
@@ -107,7 +107,7 @@ rebuilding package: $pkgname $pkgver (from changelog)
 		bdlok=false
 		for bld in $buildfor
 		do
-			[ $bld == $distro_name ] && {
+			[ $bld = $distro_name ] && {
 				bldok=true
 				break
 			}
@@ -227,10 +227,8 @@ move_files()
 		[ "X$out" != "X" ] && genfiles="$genfiles $out"
 	done
 
-	set +x
-
 	echo
-	echo "resulting files/dirs ($pkgname):"
+	echo -e "\nresulting files/dirs ($pkgname):\n"
 	[ "X$binfiles" != "X" ] && {
 		echo "--ARCH--------------------------------------------------------------------------"
 		ls -ld $binfiles
@@ -240,62 +238,69 @@ move_files()
 		ls -ld $genfiles
 	}
 	echo "--------------------------------------------------------------------------------"
+	echo
 
 
-	$f_only_this_distro && {
-		binfiles="$binfiles $genfiles"
-		genfiles=
-	}
+	##$f_only_this_distro && {
+		##binfiles="$binfiles $genfiles"
+		##genfiles=
+	##}
 
 	$f_move_files && {
-		# copy arch dependent packages in current slot
-		#
-		[ "X$binfiles" != "X" -a "X$binfiles" != "X " ] && {
-			echo -e "\nARCH pkgs: " $binfiles
+		[ "X$binfiles$genfiles" != "X" -a "X$binfiles$genfiles" != "X " ] && {
 			dest="$PRJ/pkgs/$distro_name"
-			[ -d $dest ] || {
-				mkdir $dest || exit $?
-			}
-
-			echo "  moving arch dependent files to $dest ..."
-			mv $binfiles $dest/. || exit $?
+			echo -n "  moving arch dependent files to $dest ... "
+			mv $binfiles $genfiles $dest/.
+			echo "ok"
 		}
-
-		[ "X$genfiles" != "X" ] && {
-			echo -e "\nNONBIN pkgs: " $genfiles
-
-			# if there are arch dependent files, install non-arch only
-			# to current target, else look for listed targets, or all
-			#
-			if [ "$binfiles" != "" ]
-			then
-				alldistros=$distro_name
-			else
-				if [ "$buildfor" == "(any)" ]
-				then
-					alldistros=$(ls $PRJ/pkgs)
-				else
-					alldistros=$buildfor
-				fi
-			fi
-
-			for distro in $alldistros
-			do
-				dest=$PRJ/pkgs/$distro
-				[ -d $dest ] && {
-					echo "  copying nonbin files to $dest ..."
-					cp -af $genfiles $dest/. || exit $?
-				}
-			done
-			rm -f $genfiles
-		} # $genfiles != ""
+		### copy arch dependent packages in current slot
+		###
+		##[ "X$binfiles" != "X" -a "X$binfiles" != "X " ] && {
+			##echo -e "\nARCH pkgs: " $binfiles
+			##dest="$PRJ/pkgs/$distro_name"
+			##[ -d $dest ] || {
+				##mkdir $dest || exit $?
+			##}
+##
+			##echo "  moving arch dependent files to $dest ..."
+			##mv $binfiles $dest/. || exit $?
+		##}
+##
+		##[ "X$genfiles" != "X" ] && {
+			##echo -e "\nNONBIN pkgs: " $genfiles
+##
+			### if there are arch dependent files, install non-arch only
+			### to current target, else look for listed targets, or all
+			###
+			##if [ "$binfiles" != "" ]
+			##then
+				##alldistros=$distro_name
+			##else
+				##if [ "$buildfor" = "(any)" ]
+				##then
+					##alldistros=$(ls $PRJ/pkgs)
+				##else
+					##alldistros=$buildfor
+				##fi
+			##fi
+##
+			##for distro in $alldistros
+			##do
+				##dest=$PRJ/pkgs/$distro
+				##[ -d $dest ] && {
+					##echo "  copying nonbin files to $dest ..."
+					##cp -af $genfiles $dest/. || exit $?
+				##}
+			##done
+			##rm -f $genfiles
+		##} # $genfiles != ""
 	} # $f_move_files
 
-	for distro in $(ls $PRJ/pkgs)
-	do
-		jtdeb-purge-pkgs -x $distro
-	done
-
+	##for distro in $(ls $PRJ/pkgs)
+	##do
+		##jtdeb-purge-pkgs -x $distro
+	##done
+	jtdeb-purge-pkgs -x $distro_name
 
 	echo "
 files/dirs left:
@@ -311,12 +316,14 @@ cleanup()
 {
 	$f_clean || return 0
 
+
 	trap "" 1 2 3 EXIT ERR
 	rm -f err.tmp
 	[ "X$pkgname" != "X" ] && {
-		cd $workdir
+		local parent=$(dirname "$workdir")
+		cd "$workdir"
 		echo -en "  running jtdeb-clean ... "
-		jtdeb-clean >../${pkgname}-rebuild-clean.log 2>&1
+		jtdeb-clean >"$parent/${pkgname}-rebuild-clean.log" 2>&1
 		echo "ok"
 	}
 	trap 1 2 3 EXIT ERR
@@ -329,30 +336,33 @@ cleanup()
 
 # (MAIN)
 
+sysname=$(uname -n); sysname=${sysname/.*}
 f_only_move_files=false
 pkgname=
 noclean=""
 f_clean=true
 f_only_show_parms=false
-f_only_this_distro=true
+##f_only_this_distro=true
 f_move_files=true
 f_temp_source=false
 distro_name=$DISTRIB_CODENAME
 Args=
 
 # XXX	this is only suitable in klabs envinronment, we don't use such files
-#	to override set the env var empty
+#	and will be removed after rebuild stage
+#
+#	to override: set the env var empty to any dummy value (ie: "NONE")
 #
 JTDEB_REBUILD_PURGE_EXTS=${JTDEB_REBUILD_PURGE_EXTS:-"dsc changes"}
 
-echo -e "\n$CMDSTR args: $@\n"
+echo -e "\n=[$sysname] $CMDSTR args: $@\n"
 
 while [ $# != 0 ]
 do
   case $1 in
     -l)			f_only_show_parms=true ;;
     --movefiles)	f_only_move_files=true ;;
-    --alldistros)	f_only_this_distro=false ;;
+    ##--alldistros)	f_only_this_distro=false ;;
     --nc)		f_clean=false; noclean="-nc" ;;
     -nc)		f_clean=false; noclean="-nc" ;;	# compatibility with dpkg-buildpackage
     --nomove)		f_move_files=false ;;
@@ -372,7 +382,7 @@ done
 Args="$@"
 
 
-if [ "X$pkgname" == "X" ]
+if [ "X$pkgname" = "X" ]
 then
 	# search upward for main package dir
 	#
@@ -385,7 +395,7 @@ then
 		}
 		cd ..
 	done
-  	[ "$pkgname" == "" ] && {
+  	[ "$pkgname" = "" ] && {
 		echo "error, can't find main package dir (debian subdir not found)" >&2
 		exit 1
 	}

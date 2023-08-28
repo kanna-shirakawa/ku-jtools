@@ -4,8 +4,8 @@
 # __copy2__
 #
 CMD=$(basename $0)
-CMDVER="1.5"
-CMDSTR="$CMD v.$CMDVER (2021-10-23)"
+CMDVER="1.6"
+CMDSTR="$CMD v.$CMDVER (2023-07-23)"
 
 set -e -u
 
@@ -199,10 +199,6 @@ do
 	  --cd)
 	  	shift
 		[ $# = 0 ] && usage
-		[ -d "$1" ] || {
-			echo -e "\n$CMD error: directory '$1' not found\n" >&2
-			exit 1
-		}
 		changedir=$1
 		;;
 	  --)		shift ; break ;;
@@ -324,6 +320,10 @@ fi >>$tmprc
 
 if [ "X$changedir" != "X" ]
 then
+	# moves first in $PRJ, then in $changedir, allowing not-absolute paths
+	# (relative to $PRJ)
+	#
+	echo "cd '$PRJ'" >>$tmprc
 	echo "cd '$changedir'" >>$tmprc
 else
 	$f_changedir && echo "cd '$PRJ'" >>$tmprc

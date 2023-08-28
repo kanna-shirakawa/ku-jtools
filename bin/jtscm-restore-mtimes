@@ -1,6 +1,9 @@
 #!/bin/bash
 #
 CMD=$(basename $0)
+CMDVER="1.2"
+CMDSTR="$CMD v$CMDVER (2022-03-24)"
+
 set -e -u
 
 PRJ=${PRJ:-""}
@@ -9,6 +12,8 @@ timefile="$PRJ/.prj_mtimes"
 usage()
 {
 	echo "
+== $CMDSTR == restore files mtime from .prj_mtimes file ==
+
 usage: $CMD [options]
 
 options:
@@ -19,6 +24,8 @@ options:
  -v|--verbose		verbose
  -c|--config file	use optional config 'file' (now: $configfile)
  -D[n]|--debug[=n]	set debug, optionally with level
+
+= timefile is: $timefile
 
 " >&2
 	[ $# != 0 ] && echo -e "$*\n" >&2
@@ -40,6 +47,15 @@ ignorefile()
 	return 1
 }
 
+
+unregexp()
+{
+	echo "$1" | sed \
+		-e 's/\./\\./g' \
+		-e 's/\$/\\$/g' \
+		-e 's/\[/\\[/g' \
+		-e 's/\]/\\]/g'
+}
 
 # (MAIN)
 
@@ -164,7 +180,9 @@ do
 
 	$DEBUG && echocr " $fname"
 
-	mtime=$(grep "^$fname|" $timefile | cut -d'|' -f2)
+	ureg=$(unregexp "$fname")	# unescape regexp from filename
+
+	mtime=$(grep "^$ureg|" $timefile | cut -d'|' -f2)
 	[ "$mtime" == "" ] && {
 		echo "no-mtime: $fname"
 		continue

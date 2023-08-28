@@ -4,43 +4,55 @@
 # __copy2__
 #
 CMD=$(basename $0)
-CMDVER="2.0"
-CMDSTR="$CMD v$CMD (2019/03)"
-
-KEYNAME="packager"
-KEYFILE="$PRJ/gpg/KEY.gpg"
+CMDVER="2.2"
+CMDSTR="$CMD v$CMDVER (2023-03-30)"
 
 set -e -u
 
-target="$PRJ/target"
+usage()
+{
+	echo "
+== $CMDSTR == rebuilds distros release files ==
 
-umask 0002
+usage: $CMD [distro(s) ...]
+" >&2
+	exit 127
+}
 
 
 update_commons()
 {
 	local dist=$1
-	local here=`pwd`
-	local distname=`basename $dist`
+	local here=$(pwd)
+	local distname=$(basename $dist)
 	local file=
 
-	for file in `(cd $PRJ/common ; ls *.deb 2>/dev/null)`
+	for file in $( (cd "$PRJ/common" ; ls *.deb 2>/dev/null) )
 	do
 		[ -L $dist/$file ] && rm -f $dist/$file
 		[ -f $dist/$file ] && continue
 		echo "  copying (common)   $file"
-		cp -a $PRJ/common/$file $dist/.
+		cp -a "$PRJ/common/$file" "$dist/."
 	done
 
-	[ -d $PRJ/external/$distname ] && {
-		for file in `(cd $PRJ/external/$distname ; ls *.deb 2>/dev/null)`
-		do
-			[ -L $dist/$file ] && rm -f $dist/$file
-			[ -f $dist/$file ] && continue
-			echo "  copying (external) $distname/$file"
-			cp -a $PRJ/external/$distname/$file $dist/.
-		done
-	}
+	[ -d "$PRJ/external/$distname" ] || mkdir "$PRJ/external/$distname"
+
+	for file in $( (cd "$PRJ/external/$distname" ; ls *.deb 2>/dev/null) )
+	do
+		[ -L $dist/$file ] && rm -f $dist/$file
+		[ -f $dist/$file ] && continue
+		echo "  copying (external) $distname/$file"
+		cp -a "$PRJ/external/$distname/$file" "$dist/."
+	done
+
+	echo
+	printf " distro packages:   %4d\n" $( (cd "$PRJ/pkgs/$distname" ; ls *.deb 2>/dev/null | wc -l) )
+	printf " common packages:   %4d\n" $( (cd $PRJ/common ; ls *.deb 2>/dev/null | wc -l) )
+	printf " external packages: %4d\n" $( (cd "$PRJ/external/$distname" ; ls *.deb 2>/dev/null | wc -l) )
+	echo
+	printf " total packages:    %4d\n" $( (cd "$dist" ; ls *.deb 2>/dev/null | wc -l) )
+	echo
+
 	return 0
 }
 
@@ -49,26 +61,28 @@ update_repo()
 	local dist=$1
 	local here=$(pwd)
 	local gpg_key="$PRJ/gpg/KEY.gpg"
+	local cwd=
 
 	echo " updating $dist ..."
 	update_commons $dist
 	cd $dist
-	echo -n "  generating Packages file ... "
+	cwd=$(pwd | sed -e "s#$PRJ/#\$PRJ/#")
+	echo -n "  generating $cwd/Packages file ... "
 	apt-ftparchive packages . >Packages
 	gzip <Packages >Packages.gz
 	echo "ok"
-	echo -n "  generating Release file ... "
+	echo -n "  generating $cwd/Release file ... "
 	apt-ftparchive release . >Release
 	echo "ok"
 
 	if [ -f $gpg_key ]
 	then
-		echo -n "  generating Release.gpg file ... "
+		echo -n "  generating $cwd/Release.gpg file ... "
 		rm -f Release.gpg
 		gpg --default-key ${KEYNAME} -abs -o Release.gpg Release
 		echo "ok"
 
-		echo -n "  generating InRelease file ... "
+		echo -n "  generating $cwd/InRelease file ... "
 		rm -f InRelease
 		gpg --default-key ${KEYNAME} --clearsign -o InRelease Release
 		echo "ok"
@@ -78,11 +92,35 @@ update_repo()
 		echo "  warning: gpg key file $gpg_key not found"
 		echo "           will not generate Release.gpg and InRelease files"
 	fi
+
+	echo -en "\n  fixing perms on $cwd "
+	echo -n "."; $SUDO chgrp ftp -R .
+	echo -n "."; $SUDO chmod a+r,g+rw -R .
+	echo -n "."; $SUDO find . -type d -exec chmod g+rwxs {} \;
+	echo -e " ok\n"
+
 	cd $here
 }
 
 
 # (MAIN)
+
+sysname=$(uname -n); sysname=${sysname/.*}
+
+echo -e "\n=[$sysname] $CMDSTR args: $*\n"
+
+KEYNAME="packager"
+KEYFILE="$PRJ/gpg/KEY.gpg"
+SUDO=
+
+target="$PRJ/target"
+
+umask 0002
+
+case ${1:-} in
+  -h|--help)	usage ;;
+  -*)		usage ;;
+esac
 
 file="$PRJ/etc/packager_name"
 [ -f $file ] && {
@@ -107,11 +145,7 @@ echo
 cd $target
 stat=0
 
-# just to cache credentials for future invocations
-#
-sudo ls >/dev/null
-
-if [ X"$1" != "X" ]
+if [ X"${1:-}" != "X" ]
 then
 	for dist
 	do
@@ -119,14 +153,14 @@ then
 		[ -d $path ] || path="dists/$dist"
 		[ -d $path ] || {
 			echo "error: directory '$dist' not exists" >&2
-			echo "(here is: `pwd`)" >&2
+			echo "(here is: $(pwd))" >&2
 			stat=1
 			continue
 		}
 		update_repo $path
 	done
 else
-	for dist in `ls -d dists/*`
+	for dist in $(ls -d dists/*)
 	do
 		[ -d $dist ] && {
 			update_repo $dist
@@ -134,13 +168,5 @@ else
 	done
 fi
 [ $stat != 0 ] && exit $stat
-
-# fixes
-echo -en " fixing perms ... "
-sudo chgrp ftp -R .
-sudo chmod g+rw -R .
-sudo chmod a+r -R .
-sudo find . -type d -exec chmod g+rwxs {} \;
-echo "ok"
 
 exit $stat

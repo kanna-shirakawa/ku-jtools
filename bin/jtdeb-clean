@@ -4,12 +4,17 @@
 # __copy2__
 #
 CMD=$(basename $0)
-CMDVER="1.1"
-CMDSTR="$CMD v$CMDVER (2018/03)"
+CMDVER="1.2"
+CMDSTR="$CMD v$CMDVER (2023-03-14)"
 
 set -e -u
 
-echo -e "\n$CMDSTR args: $@\n"
+# (MAIN)
+
+
+sysname=$(uname -n); sysname=${sysname/.*}
+
+echo -e "\n=[$sysname] $CMDSTR args: $@\n"
 
 [ -f debian/rules ] || {
 	echo "error: file 'debian/rules' not found" >&2

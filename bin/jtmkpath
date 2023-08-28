@@ -7,8 +7,8 @@ use warnings;
 use strict;
 
 my $CMD		= "jtmkpath";
-my $CMDVER	= "1.2";
-my $CMDSTR	= "$CMD v$CMDVER (2020/11)";
+my $CMDVER	= "1.4";
+my $CMDSTR	= "$CMD v$CMDVER (2023-02-05)";
 
 my $verbose	= 0;
 my $dummy	= 0;
@@ -120,21 +120,40 @@ options:
 sub makedir
 {
 	my ($dir, $owner, $mode, $verbose, $fixperms) = @_;
+	my $fixp_verbose = $verbose;
 
 	pdebug( "makedir( '%s', '%s', '%s', ... )\n", $dir, $owner, $mode );
 
-	if (-d $dir) {
-		return	if (!$fixperms);
-
-		$verbose && printf( "  fixing perms on '$dir'  ($owner, $mode)\n" );
-		$dummy && return 1;
-	} else {
+	# do not exists? try to create
+	if (! -e $dir) {
 		$verbose && printf( "  creating dir '$dir'   ($owner, $mode)\n" );
 		$dummy && return 1;
 
 		system( "mkdir", $dir )
 			and die "can't create dir '$dir'\n";
-	} 
+
+		# 2023-03-05 lc
+		# - fix: on new created dirs we MUST always set perms, too (silently)
+		$fixperms = 1;
+		$fixp_verbose = 0;
+	}
+
+	# exists, is not a dir?
+	if (! -d $dir) {
+		die "can't create dir '$dir': exists and is not a directory\n";
+	}
+
+	# exists, is a dir, need to fix perms?
+	return	if (!$fixperms);
+
+	if (-l $dir) {
+		pdebug( " fixperm(), ignore dir '%s', is a symlink\n", $dir );
+		return 1;
+	}
+
+	# exists, is a dir, must fix perms
+	$fixp_verbose && printf( "  fixing perms on '$dir'  ($owner, $mode)\n" );
+	$dummy && return 1;
 
 	system( "chmod", $mode, $dir )
 		and die "can't chmod $mode '$dir'\n";

@@ -1,5 +1,93 @@
+  * debian/compat: (devuan daedalus) raised to 10
+
+2023-07-23 09:41:09 1.1 ku23.07a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
+  * bin/jtcj
+    - mod: now you can pass non-absolute paths to --cd option, paths are relative
+    	   to $PRJ
+
+  * bin/jdeb-port
+    - mod: uses relative instead of absolute path to change directory in remote system
+    	   (see changes to bin/jtcj)
+    - fix: runs jtrepo-update only if there are no errors on rebuild phase
+
+2023-03-30 14:23:49 1.1 ku23.03c Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
+  * bin/jtrepo-rebuild
+    - mod: info messages improved
+
+2023-03-14 16:48:30 1.1 ku23.03b Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
+  * bin/jdeb-purge-pkgs, bin/jtdeb-purge-sources
+    - fix: added missing standard version env vars (CMDVER, CMDSTR)
+    - fix: replaced "cp /dev/null" with ":>" on file creation
+    - mod: replaced all backticks with "$(..)" notation
+    - mod: various aestetical stuffs (usage, messages, etc)
+
+  * bin/jtdeb-rebuild
+    - mod: removed deprecated (and unused) --alldistros option; now the script
+    	   works, as espected, only for selected distro (current, or passed as
+	   argument); all related tasks (output files displacement, packages
+	   dir cleanup) are now optimized for the current distro only
+
+  * bin/jtrepo-rebuild
+    - fix: permission fix runs on the full "target" tree, instead of single distro
+           (now only on the working distro)
+
+  * bin/jtdeb-port (and related: jtrepo-rebuild, jtrepo-update)
+    - mod: now the release files rebuild are done on target distro system, not on
+    	   original system (where the jtdeb-port command is launched); this ensure that
+	   each distro uses the right version of debian helpers
+
+  * debian/rules (debian.in/rules)
+    - fix: reverted the changes of last release (compatibility issues raised by updating
+    	   release files on old systems are solved, see changes to jtdeb-port above)
+
+2023-03-12 13:06:01 1.1 ku23.03a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
+  * debian/rules (debian.in/rules)
+    - fix: force backward compatibility gzip format on newer distros (that defaults to xz):
+           added -Zgzip to dh_builddeb
+
+  * bin/jtmkpath
+    - fix: permissions wasn't set on new created dirs
+
+2022-12-28 13:20:34 1.1 ku22.12a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
+  * bin/jtscm-autosync
+    - fix: fails on some bash versions due 'continue' instead of 'return 0' ad line 219
+
+2022-10-18 17:42:31 1.1 ku22.10a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
+  * bin/jtmkpath
+    - fix: if target exists and is a symlink on some system using chown will raise an
+    	   error, fixed (ignored if target is a symlink)
+
+2022-03-25 18:10:02 1.1 ku22.03a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
+  * bin/jtscm-restore-mtimes
+    - fix: filenames containing regexp sequence causes troubles; fixed parsing filenames
+    	   to escape such sequences before passing them to grep
+
+2022-01-29 12:15:17 1.1 ku22.01a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
+  * bin/jtdeb-rebuild
+    - fix: cleanup log now is in logical (not physical) parent dir
+
+2022-12-28 10:13:01 1.1 ku21.12a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
   * install/* install-prev/*
     - fix: clean up of versions mess
+
+  * jtinstall
+    - fix: removed a crap (temp?) patch that forced mtime on target files even
+    	   if there is no modifications (why?)
+    - mod: cosmetic, replaced all backticks with $(..)
+    - mod: more detailed debug messages on chmod/chown stages
+
+  * jtconf-parse
+    - fix: command version ($Cmd, $CmdVer, $CmdStr)
+    - add: env overrides for $DEBUG and $DEBUGLEVEL
 
 2021-10-25 17:05:21 1.1 ku21.10a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
 

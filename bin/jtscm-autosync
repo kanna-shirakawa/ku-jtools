@@ -4,8 +4,8 @@
 # __copy2__
 #
 CMD=$(basename $0)
-CMDVER="1.9"
-CMDSTR="$CMD v$CMDVER (2021-10-23)"
+CMDVER="1.10"
+CMDSTR="$CMD v$CMDVER (2022-12-28)"
 
 set -e -u
 
@@ -216,7 +216,7 @@ find_path()
 	esac
 	[ -d "$path" ] && {
 		echo "$path"
-		continue
+		return 0
 	}
 	echo "tag/path '$path' not found" >&2
 	return 1

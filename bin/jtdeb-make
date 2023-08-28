@@ -4,15 +4,18 @@
 # __copy2__
 #
 CMD=$(basename $0)
-CMDVER="1.3"
-CMDSTR="$CMD v$CMDVER (2018/05)"
+CMDVER="1.4"
+CMDSTR="$CMD v$CMDVER (2023-03-14)"
 
 set -e -u
 
+# (MAIN)
+
 JTDEB_MAKE_OPTS=${JTDEB_MAKE_OPTS:-"-us -uc"}
 f_clean=true
+sysname=$(uname -n); sysname=${sysname/.*}
 
-echo -e "\n$CMDSTR args: $@\n"
+echo -e "\n=[$sysname] $CMDSTR args: $@\n"
 
 [ "X${1:-}" = "X-nc" ] && {
 	f_clean=false

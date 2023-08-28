@@ -3,21 +3,26 @@
 # __copy1__
 # __copy2__
 #
-CMD=`basename $0`
+CMD=$(basename $0)
+CMDVER="1.1"
+CMDSTR="$CMD v$CMDVER (2023-03-14)"
 
-eval $(ku-distroenv)
+set -e -u
 
 usage()
 {
 	echo "
-usage: $CMD [-x] [--debug] [distro(s)]
+== $CMDSTR == remove old version files from \$PRJ/pkgs dir ==
 
-distro:
+usage: $CMD [-x] [distro(s)]
+
+options:
+  --all|ALL	processes all distros
+  -x		execute (default: dry-run)
+
+distros:
   . default distro is the installed one ($DISTRIB_CODENAME)
-  . you can use ALL or --all to process all distros
-
-* purge old version files from \$PRJ/pkgs dir
-* use -x to execute (default is show only actions)
+  . --all overrides the provided list (or default)
 " >&2
 	exit 1
 }
@@ -31,10 +36,11 @@ cleanup()
 
 # (MAIN)
 
+eval $(ku-distroenv)
+
 f_exec=false
 f_all=false
 distros=
-DEBUG=false
 
 while [ $# != 0 ]
 do
@@ -42,7 +48,6 @@ do
     -x)		f_exec=true ;;
     -a|--all)	f_all=true ;;
     ALL)	f_all=true ;;
-    -D|--debug)	DEBUG=true ;;
     -*|"")	usage ;;
     *)		distros="$distros $1" ;;
   esac
@@ -53,17 +58,17 @@ done
 	echo "directory $PRJ/pkgs not found, abort" >&2
 	exit 1
 }
-cd $PRJ/pkgs || exit $?
+cd $PRJ/pkgs
 
 
 $f_all && {
 	[ "$distros" != "" ] && usage
-	distros=`ls`
+	distros=$(ls)
 }
 
 [ "$distros" == "" ] && distros=$DISTRIB_CODENAME
 
-tmp=`mktemp /tmp/$CMD-XXXXXXXXX`
+tmp=$(mktemp /tmp/$CMD-XXXXXXXXX)
 
 trap "echo '*INTR*'; cleanup; exit 255" 1 2 3
 
@@ -72,25 +77,25 @@ cd $PRJ/pkgs || {
 	exit $?
 }
 
+action="purge"
+$f_exec || action="(dummy) purge"
+
 for distro in $distros
 do
-	cd $distro || exit $?
-	echo "purging \$PRJ/pkgs/$distro dir ..."
+	cd $distro
+	echo "  purging \$PRJ/pkgs/$distro dir ..."
 
-	cp /dev/null $tmp
+	:>$tmp
 
-	for file in `ls -t *.deb 2>/dev/null`
+	for file in $(ls -t *.deb 2>/dev/null)
 	do
-		eval `jtdeb-version $file`
+		eval $(jtdeb-version $file)
 		echo $pkg_name >>$tmp
 		grep -q "^$pkg_name $pkg_arch$" $tmp && {
-			files="pkgs/$distro/$file\n`(cd $PRJ; find target/dists/$distro -name $file)`"
-			set `echo -en "$files" | wc -l`
-			echo " purge $file -- $1 file(s)"
-			files=`echo -e $files`
-			$DEBUG && {
-				echo "D> rm -f $files"
-			}
+			files="pkgs/$distro/$file\n$( (cd $PRJ; find target/dists/$distro -name $file) )"
+			set $(echo -en "$files" | wc -l)
+			echo "   $action $file -- $1 file(s)"
+			files=$(echo -e $files)
 			$f_exec && {
 				(cd $PRJ ; rm -f $files)
 			}

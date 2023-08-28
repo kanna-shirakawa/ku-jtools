@@ -3,17 +3,20 @@
 # __copy1__
 # __copy2__
 #
-CMD=`basename $0`
+CMD=$(basename $0)
+CMDVER="2.1"
+CMDSTR="$CMD v$CMDVER (2023-03-13)"
 
-[ -f $PRJ/etc/target ] || { echo "$PRJ/etc/target file missing" >&2; exit 1; }
-
-repodir="$PRJ/target"
-remotedir=`cat $PRJ/etc/target`
+set -e -u
 
 
 usage()
 {
-	echo "usage: $0 [distname(s) | --all]" >&2
+	echo "
+== $CMDSTR == rebuild and update repo(s) ==
+
+usage: $0 [distname(s) | --all]
+" >&2
 	exit 1
 }
 
@@ -22,17 +25,29 @@ eval $(ku-distroenv)
 
 # (MAIN)
 
-case $1 in
-  -a|--all)	dists=`cd $PRJ/target/dists && ls` ;;
+sysname=$(uname -n); sysname=${sysname/.*}
+
+echo -e "\n=[$sysname] $CMDSTR args: $*\n"
+
+case ${1:-} in
+  -a|--all)	dists=$(cd $PRJ/target/dists && ls) ;;
   -*)		usage ;;
   "")		dists=$DISTRIB_CODENAME ;;
   *)		dists=$* ;;
 esac
 
+repodir="$PRJ/target"
+remotecmd=
+remotedir=
 
-# just to cache credentials for future invocations
-#
-sudo ls >/dev/null
+[ -f $PRJ/etc/target ]		&& remotedir=$(cat $PRJ/etc/target)
+[ -x $PRJ/etc/target.cmd ]	&& remotecmd=$PRJ/etc/target.cmd
+
+[ "X$remotecmd" = "X" -a "X$remotedir" = "X" ] && {
+	echo -e "\n$CMD error: $PRJ/etc/target[.cmd] file missing\n" >&2
+	exit 1
+}
+
 
 for dist in $dists
 do
@@ -40,7 +55,7 @@ do
 	targetdir=$distdir
 	pkgsdir=$PRJ/pkgs/$dist
 
-	#arch=`uname -m`
+	#arch=$(uname -m)
 	#case "$arch" in
 	  #i*86)	arch=i386 ;;
 	#esac
@@ -64,7 +79,7 @@ do
 	# preliminary setup
 	#
 	cd $distdir
-	[ -d $tartgetdir ] || {
+	[ -d $targetdir ] || {
 		echo "  creating dir $targetdir"
 		mkdir -p $targetdir || exit $?
 	}
@@ -81,7 +96,7 @@ do
 	for pkg in *.deb
 	do
 		printf " %-55s   ... " $pkg
-		pkgname=`echo $pkg | sed -e 's/_.*//'`
+		pkgname=$(echo $pkg | sed -e 's/_.*//')
 		must_install=false
 		if [ -f $targetdir/$pkg ]
 		then
@@ -100,11 +115,11 @@ do
 		}
 
 		to_purge=
-		pkgfullname=`echo $pkg | sed -e 's/_[a-z0-9][a-z0-9_]*\.deb//'`
+		pkgfullname=$(echo $pkg | sed -e 's/_[a-z0-9][a-z0-9_]*\.deb//')
 
-		for actual in `(cd $targetdir ; ls ${pkgname}_* 2>/dev/null)`
+		for actual in $( (cd $targetdir ; ls ${pkgname}_* 2>/dev/null) )
 		do
-			actname=`echo $actual | sed -e 's/_[a-z0-9][a-z0-9_]*\.deb//'`
+			actname=$(echo $actual | sed -e 's/_[a-z0-9][a-z0-9_]*\.deb//')
 			[ $actname != $pkgfullname ] && to_purge="$to_purge $actual"
 		done
 		[ "$to_purge" != "" ] && {
@@ -122,6 +137,13 @@ done
 # update remote dir
 #
 echo -e "  updating remote repo $remotedir\n"
-sudo mirror -f $repodir $remotedir || exit $?
+if [ "X$remotecmd" != "X" ]
+then
+	echo -e "\n$CMD: sourcing $remotecmd\n"
+	. $remotecmd
+else
+	echo -e "\n$CMD: running sudo mirror -f $repodir $remotedir\n"
+	sudo mirror -f $repodir $remotedir
+fi
 
 exit 0
