@@ -1,3 +1,8 @@
+  * bin/jtdeb-rebuild
+    - fix: doesn't copy source files when running on remote build server
+
+2024-03-07 07:45:10 1.1 ku23.08a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>
+
   * debian/compat: (devuan daedalus) raised to 10
 
 2023-07-23 09:41:09 1.1 ku23.07a Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>

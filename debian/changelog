@@ -1,9 +1,16 @@
+ku-jtools (1.1-ku24-03a) unstable; urgency=low
+
+  * bin/jtdeb-rebuild
+    - fix: doesn't copy source files when running on remote build server
+
+
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 01 Oct 2024 06:08:21 +0000
+
 ku-jtools (1.1-ku23-08a) unstable; urgency=low
 
   * debian/compat: (devuan daedalus) raised to 10
 
-
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Mon, 28 Aug 2023 14:20:39 +0200
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Thu, 07 Mar 2024 07:45:10 +0000
 
 ku-jtools (1.1-ku23-07a) unstable; urgency=low
 
@@ -16,14 +23,14 @@ ku-jtools (1.1-ku23-07a) unstable; urgency=low
     	   (see changes to bin/jtcj)
     - fix: runs jtrepo-update only if there are no errors on rebuild phase
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sun, 23 Jul 2023 09:41:09 +0200
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sun, 23 Jul 2023 09:41:09 +0000
 
 ku-jtools (1.1-ku23-03c) unstable; urgency=low
 
   * bin/jtrepo-rebuild
     - mod: info messages improved
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Thu, 30 Mar 2023 14:23:49 +0200
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Thu, 30 Mar 2023 14:23:49 +0000
 
 ku-jtools (1.1-ku23-03b) unstable; urgency=low
 
@@ -52,7 +59,7 @@ ku-jtools (1.1-ku23-03b) unstable; urgency=low
     - fix: reverted the changes of last release (compatibility issues raised by updating
     	   release files on old systems are solved, see changes to jtdeb-port above)
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 14 Mar 2023 16:48:30 +0100
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 14 Mar 2023 16:48:30 +0000
 
 ku-jtools (1.1-ku23-03a) unstable; urgency=low
 
@@ -63,14 +70,14 @@ ku-jtools (1.1-ku23-03a) unstable; urgency=low
   * bin/jtmkpath
     - fix: permissions wasn't set on new created dirs
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sun, 12 Mar 2023 13:06:01 +0100
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sun, 12 Mar 2023 13:06:01 +0000
 
 ku-jtools (1.1-ku22-12a) unstable; urgency=low
 
   * bin/jtscm-autosync
     - fix: fails on some bash versions due 'continue' instead of 'return 0' ad line 219
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Wed, 28 Dec 2022 13:20:34 +0100
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Wed, 28 Dec 2022 13:20:34 +0000
 
 ku-jtools (1.1-ku22-10a) unstable; urgency=low
 
@@ -78,7 +85,7 @@ ku-jtools (1.1-ku22-10a) unstable; urgency=low
     - fix: if target exists and is a symlink on some system using chown will raise an
     	   error, fixed (ignored if target is a symlink)
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 18 Oct 2022 17:42:31 +0200
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Tue, 18 Oct 2022 17:42:31 +0000
 
 ku-jtools (1.1-ku22-03a) unstable; urgency=low
 
@@ -86,14 +93,14 @@ ku-jtools (1.1-ku22-03a) unstable; urgency=low
     - fix: filenames containing regexp sequence causes troubles; fixed parsing filenames
     	   to escape such sequences before passing them to grep
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Fri, 25 Mar 2022 18:10:02 +0100
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Fri, 25 Mar 2022 18:10:02 +0000
 
 ku-jtools (1.1-ku22-01a) unstable; urgency=low
 
   * bin/jtdeb-rebuild
     - fix: cleanup log now is in logical (not physical) parent dir
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sat, 29 Jan 2022 12:15:17 +0100
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sat, 29 Jan 2022 12:15:17 +0000
 
 ku-jtools (1.1-ku21-12a) unstable; urgency=low
 
@@ -110,7 +117,7 @@ ku-jtools (1.1-ku21-12a) unstable; urgency=low
     - fix: command version ($Cmd, $CmdVer, $CmdStr)
     - add: env overrides for $DEBUG and $DEBUGLEVEL
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Wed, 28 Dec 2022 10:13:01 +0100
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Wed, 28 Dec 2022 10:13:01 +0000
 
 ku-jtools (1.1-ku21-10a) unstable; urgency=low
 
@@ -140,13 +147,13 @@ ku-jtools (1.1-ku21-10a) unstable; urgency=low
     - fix: removed bashism (== instead of =)
     - fix: now works on temp files, overwrite target ones only on success
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Mon, 25 Oct 2021 17:05:21 +0200
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Mon, 25 Oct 2021 17:05:21 +0000
 
 ku-jtools (1.1-ku21-05) unstable; urgency=low
 
   * production release ku21.05
 
- -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sat, 18 Sep 2021 13:05:34 +0200
+ -- Lorenzo Canovi (KUBiC Labs, CH) <packager@kubiclabs.com>  Sat, 18 Sep 2021 13:05:34 +0000
 
 ku-jtools (1.1-ku21-04a) unstable; urgency=low
 
@@ -156,7 +163,7 @@ ku-jtools (1.1-ku21-04a) unstable; urgency=low
     	   usually is a locase letter; releases YY.mm (w/out patchlevel) are
 	   production ones
 
- -- KUBiC Labs (CH) <packager@kubiclabs.com>  Wed, 21 Apr 2021 17:25:31 +0200
+ -- KUBiC Labs (CH) <packager@kubiclabs.com>  Wed, 21 Apr 2021 17:25:31 +0000
 
 ku-jtools (1.1-ku19-08) unstable; urgency=low
 
@@ -175,13 +182,13 @@ ku-jtools (1.1-ku19-08) unstable; urgency=low
   - bin/jtmkpath
     - fix: fails on undefined owner if relative path was used
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 03 Dec 2019 11:20:32 +0100
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 03 Dec 2019 11:20:32 +0000
 
 ku-jtools (1.1-ku19-06) unstable; urgency=low
 
   * production release 1.1-ku19.06
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Wed, 30 Oct 2019 16:04:12 +0100
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Wed, 30 Oct 2019 16:04:12 +0000
 
 ku-jtools (1.1-ku19-05) unstable; urgency=low
 
@@ -197,13 +204,13 @@ ku-jtools (1.1-ku19-05) unstable; urgency=low
   * bin/jtmkpath
     - fix: wrong user:group used on missing directory in paths
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 28 Oct 2019 09:14:22 +0100
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 28 Oct 2019 09:14:22 +0000
 
 ku-jtools (1.1-ku19-04) unstable; urgency=low
 
   * production release 1.1-ku19.04
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sun, 30 Jun 2019 14:20:31 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sun, 30 Jun 2019 14:20:31 +0000
 
 ku-jtools (1.1-ku19-03) unstable; urgency=low
 
@@ -221,13 +228,13 @@ ku-jtools (1.1-ku19-03) unstable; urgency=low
     - mod: CMDVER, CMDSTR; improved some messages, cleaned code (removed bash-isms,
     	   changed all backticks with $() notation)
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 28 Jun 2019 17:16:43 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 28 Jun 2019 17:16:43 +0000
 
 ku-jtools (1.1-ku19-02) unstable; urgency=low
 
   * production release 1.1-ku19.02
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 12 Apr 2019 21:10:34 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 12 Apr 2019 21:10:34 +0000
 
 ku-jtools (1.1-ku19-01) unstable; urgency=low
 
@@ -237,13 +244,13 @@ ku-jtools (1.1-ku19-01) unstable; urgency=low
            gpg key file name can be set in file $PRJ/etc/gpg_key_filename (default:
 	   $PRJ/gpg/KEY.pgp)
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 12 Apr 2019 11:30:11 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 12 Apr 2019 11:30:11 +0000
 
 ku-jtools (1.1-ku19-00) unstable; urgency=low
 
   * production release 1.1-ku19.00
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sat, 02 Mar 2019 13:39:03 +0100
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sat, 02 Mar 2019 13:39:03 +0000
 
 ku-jtools (1.1-ku0-11) unstable; urgency=low
 
@@ -262,13 +269,13 @@ ku-jtools (1.1-ku0-11) unstable; urgency=low
     	   instead of guessing based from package filename
     - mod: messages aestetical changes and minor bug fixes
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 30 Jul 2018 14:20:45 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 30 Jul 2018 14:20:45 +0000
 
 ku-jtools (1.1-ku0-10) unstable; urgency=low
 
   * production release 1.1-ku0.10
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 12 Jun 2018 14:01:20 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 12 Jun 2018 14:01:20 +0000
 
 ku-jtools (1.1-ku0-9) unstable; urgency=low
 
@@ -284,13 +291,13 @@ ku-jtools (1.1-ku0-9) unstable; urgency=low
     - add: --flat option to produce dump in flat format (section embedded in
     	   variable name)
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 12 Jun 2018 12:05:47 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Tue, 12 Jun 2018 12:05:47 +0000
 
 ku-jtools (1.1-ku0-8) unstable; urgency=low
 
   * production release 1.1-ku0.8
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sun, 13 May 2018 17:02:20 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Sun, 13 May 2018 17:02:20 +0000
 
 ku-jtools (1.1-ku0-7) unstable; urgency=low
 
@@ -310,13 +317,13 @@ ku-jtools (1.1-ku0-7) unstable; urgency=low
   * jtdeb-rebuild
     - fix: now calls jdeb-clean for a *real* cleanup
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 12 Mar 2018 16:55:50 +0100
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Mon, 12 Mar 2018 16:55:50 +0000
 
 ku-jtools (1.1-ku0-6) unstable; urgency=low
 
   * production release 1.1-ku0.6
 
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 14 Sep 2018 02:13:15 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Fri, 14 Sep 2018 02:13:15 +0000
 
 ku-jtools (1.1-ku0-5) unstable; urgency=low
 
@@ -326,5 +333,5 @@ ku-jtools (1.1-ku0-5) unstable; urgency=low
     	   nfs delays
 
   * jtdeb-cache
- -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Wed, 13 Sep 2017 14:49:51 +0200
+ -- KUBiC Labs, Allblue SA (CH) <packager@kubiclabs.com>  Wed, 13 Sep 2017 14:49:51 +0000
 

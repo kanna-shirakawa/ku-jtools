@@ -4,8 +4,8 @@
 # __copy2__
 #
 CMD=$(basename $0)
-CMDVER="1.10"
-CMDSTR="$CMD v.$CMDVER (2023-03-14)"
+CMDVER="1.11"
+CMDSTR="$CMD v.$CMDVER (2024-03-07)"
 
 set -e -u
 
@@ -149,6 +149,7 @@ move_files()
 {
 	local binfiles=
 	local genfiles=
+	local srcfiles=
 	local arch=
 	local alldistro=
 	local pkg=
@@ -160,6 +161,8 @@ move_files()
 	local parent=$(dirname "$workdir")
 
 	set -e -u
+
+	echo -e "\n$CMD: move-files ---------------------------------------------------------------\n"
 
 	case $(uname -m) in
 	  x86_64)	arch="amd64" ;;
@@ -213,19 +216,24 @@ move_files()
 	}
 
 	$f_temp_source && {
-		echo "  cleaning $pkgname.tar.[gx]z .."
-		rm -f $pkgname.tar.[gx]z
-		echo "  cleaning $pkgname dir .."
-		rm -rf $pkgname
+		files=$(ls -d $pkgname.tar.[gx]z $pkgname)
+		for files in $files
+		do
+			echo "  cleaning temp_source $file"
+			rm -f $file
+		done
 	}
 
 	for pkg in $pkgs
 	do
-		out=$(ls ${pkg}_${pkg_fullversion}_${arch}.deb 2>/dev/null)
-		[ "X$out" != "X" ] && binfiles="$binfiles $out"
-		out=$(ls ${pkg}_${pkg_fullversion}_all.deb 2>/dev/null)
-		[ "X$out" != "X" ] && genfiles="$genfiles $out"
+		files=$(ls ${pkg}_${pkg_fullversion}_${arch}.deb 2>/dev/null)
+		[ "X$files" != "X" ] && binfiles="$binfiles $files"
+		files=$(ls ${pkg}_${pkg_fullversion}_all.deb 2>/dev/null)
+		[ "X$files" != "X" ] && genfiles="$genfiles $files"
 	done
+
+	files=$(ls ${pkg}_${pkg_fullversion}.tar.[gx]z 2>/dev/null)
+	[ "X$files" != "X" ] && srcfiles="$srcfiles $files"
 
 	echo
 	echo -e "\nresulting files/dirs ($pkgname):\n"
@@ -237,69 +245,31 @@ move_files()
 		echo "--ALL---------------------------------------------------------------------------"
 		ls -ld $genfiles
 	}
+	[ "X$srcfiles" != "X" ] && {
+		echo "--SRC---------------------------------------------------------------------------"
+		ls -ld $srcfiles
+	}
 	echo "--------------------------------------------------------------------------------"
 	echo
 
-
-	##$f_only_this_distro && {
-		##binfiles="$binfiles $genfiles"
-		##genfiles=
-	##}
-
 	$f_move_files && {
-		[ "X$binfiles$genfiles" != "X" -a "X$binfiles$genfiles" != "X " ] && {
-			dest="$PRJ/pkgs/$distro_name"
-			echo -n "  moving arch dependent files to $dest ... "
-			mv $binfiles $genfiles $dest/.
+		dest="$PRJ/pkgs/$distro_name"
+		for file in $binfiles $genfiles
+		do
+			echo -n "  move deb: $file to $dest ... "
+			mv $file $dest/.
 			echo "ok"
-		}
-		### copy arch dependent packages in current slot
-		###
-		##[ "X$binfiles" != "X" -a "X$binfiles" != "X " ] && {
-			##echo -e "\nARCH pkgs: " $binfiles
-			##dest="$PRJ/pkgs/$distro_name"
-			##[ -d $dest ] || {
-				##mkdir $dest || exit $?
-			##}
-##
-			##echo "  moving arch dependent files to $dest ..."
-			##mv $binfiles $dest/. || exit $?
-		##}
-##
-		##[ "X$genfiles" != "X" ] && {
-			##echo -e "\nNONBIN pkgs: " $genfiles
-##
-			### if there are arch dependent files, install non-arch only
-			### to current target, else look for listed targets, or all
-			###
-			##if [ "$binfiles" != "" ]
-			##then
-				##alldistros=$distro_name
-			##else
-				##if [ "$buildfor" = "(any)" ]
-				##then
-					##alldistros=$(ls $PRJ/pkgs)
-				##else
-					##alldistros=$buildfor
-				##fi
-			##fi
-##
-			##for distro in $alldistros
-			##do
-				##dest=$PRJ/pkgs/$distro
-				##[ -d $dest ] && {
-					##echo "  copying nonbin files to $dest ..."
-					##cp -af $genfiles $dest/. || exit $?
-				##}
-			##done
-			##rm -f $genfiles
-		##} # $genfiles != ""
+		done
+
+		dest="$PRJ/sources"
+		for file in $srcfiles
+		do
+			echo -n "  move src: $file to $dest ... "
+			mv $file $dest/.
+			echo "ok"
+		done
 	} # $f_move_files
 
-	##for distro in $(ls $PRJ/pkgs)
-	##do
-		##jtdeb-purge-pkgs -x $distro
-	##done
 	jtdeb-purge-pkgs -x $distro_name
 
 	echo "
