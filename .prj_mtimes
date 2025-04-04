@@ -1,4 +1,4 @@
-.|1727763769|kanna
+.|1743775753|kanna
 templates|1348362536|kanna
 templates/fossil-project-entry.html|1348358212|kanna
 templates/wiki-page|1282523979|kanna
@@ -12,7 +12,7 @@ conf.d/00defaults|1411247698|kanna
 conf.d/wiki-company|1300950647|kanna
 conf.d/wiki-generic|1301195822|kanna
 conf.d/wiki-site|1300980148|kanna
-README.md|1635173027|kanna
+README.md|1743775610|kanna
 obsolete|1635243714|kanna
 obsolete/jtmoin-readpage|1301196539|kanna
 obsolete/debian-changelog|1350088826|kanna
@@ -56,7 +56,7 @@ etc/required-pkgs|1282523979|kanna
 etc/info|1321267966|kanna
 etc/desc|1321267955|kanna
 .gitignore|1727763322|kanna
-bin|1722186340|kanna
+bin|1727764869|kanna
 bin/jtfos-getconfig|1348560416|kanna
 bin/jtdir|1575119580|kanna
 bin/jtfos-update-n|1348502324|kanna
@@ -113,7 +113,7 @@ ku/history.new|1727762902|kanna
 ku/install.sh|1635245114|kanna
 ku/history|1709794546|kanna
 ku/install|1709794563|kanna
-.jtscm-autosync.lock|1727763769|kanna
+.jtscm-autosync.lock|1743775753|kanna
 debian|1709794636|kanna
 debian/compat|1693225187|kanna
 debian/changelog|1727762902|kanna
